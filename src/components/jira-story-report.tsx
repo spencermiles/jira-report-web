@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Upload, FileText, Calendar, AlertCircle, HelpCircle } from 'lucide-react';
+import { Upload, FileText, Calendar, AlertCircle, HelpCircle, CalendarDays } from 'lucide-react';
 import { 
   JiraIssue, 
   ProcessedStory, 
@@ -13,9 +13,212 @@ import {
 const JiraStoryReport = () => {
   const [processedStories, setProcessedStories] = useState<ProcessedStory[]>([]);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
-  const [fileName, setFileName] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const [sortConfig, setSortConfig] = useState<{ key: string; direction: 'asc' | 'desc' } | null>(null);
   const [hoveredTooltip, setHoveredTooltip] = useState<TooltipType>(null);
+
+  // Filter states
+  const [filters, setFilters] = useState({
+    issueTypes: [] as string[],
+    sprints: [] as string[],
+    storyPoints: [] as (number | 'none')[],
+    startDate: '' as string,
+    endDate: '' as string
+  });
+
+  // Get unique values for filters
+  const getFilterOptions = () => {
+    const issueTypes = [...new Set(processedStories.map(story => story.issue_type))].sort();
+    const sprints = [...new Set(processedStories.map(story => story.sprint))].filter(Boolean).sort();
+    const storyPointsSet = new Set<number | 'none'>();
+    
+    processedStories.forEach(story => {
+      if (story.story_points && story.story_points > 0) {
+        storyPointsSet.add(story.story_points);
+      } else {
+        storyPointsSet.add('none');
+      }
+    });
+    
+    const storyPoints = Array.from(storyPointsSet).sort((a, b) => {
+      if (a === 'none') return 1;
+      if (b === 'none') return -1;
+      return a - b;
+    });
+
+    return { issueTypes, sprints, storyPoints };
+  };
+
+  // Apply filters to stories
+  const filteredStories = processedStories.filter(story => {
+    // Issue type filter
+    if (filters.issueTypes.length > 0 && !filters.issueTypes.includes(story.issue_type)) {
+      return false;
+    }
+
+    // Sprint filter
+    if (filters.sprints.length > 0 && !filters.sprints.includes(story.sprint)) {
+      return false;
+    }
+
+    // Story points filter
+    if (filters.storyPoints.length > 0) {
+      const storyPointValue = (story.story_points && story.story_points > 0) ? story.story_points : 'none';
+      if (!filters.storyPoints.includes(storyPointValue)) {
+        return false;
+      }
+    }
+
+    // Date range filter
+    if (filters.startDate || filters.endDate) {
+      const createdDate = new Date(story.created);
+      
+      if (filters.startDate) {
+        const startDate = new Date(filters.startDate);
+        if (createdDate < startDate) {
+          return false;
+        }
+      }
+      
+      if (filters.endDate) {
+        const endDate = new Date(filters.endDate);
+        endDate.setHours(23, 59, 59, 999); // Include the entire end date
+        if (createdDate > endDate) {
+          return false;
+        }
+      }
+    }
+
+    return true;
+  });
+
+  // Count stories for each filter option
+  const getFilterCounts = () => {
+    const { issueTypes, sprints, storyPoints } = getFilterOptions();
+    
+    const issueTypeCounts = issueTypes.map(type => ({
+      value: type,
+      count: processedStories.filter(story => {
+        // Apply other active filters but not issue type filter
+        if (filters.sprints.length > 0 && !filters.sprints.includes(story.sprint)) return false;
+        if (filters.storyPoints.length > 0) {
+          const storyPointValue = (story.story_points && story.story_points > 0) ? story.story_points : 'none';
+          if (!filters.storyPoints.includes(storyPointValue)) return false;
+        }
+        // Apply date filter
+        if (filters.startDate || filters.endDate) {
+          const createdDate = new Date(story.created);
+          if (filters.startDate && createdDate < new Date(filters.startDate)) return false;
+          if (filters.endDate) {
+            const endDate = new Date(filters.endDate);
+            endDate.setHours(23, 59, 59, 999);
+            if (createdDate > endDate) return false;
+          }
+        }
+        return story.issue_type === type;
+      }).length
+    }));
+
+    const sprintCounts = sprints.map(sprint => ({
+      value: sprint,
+      count: processedStories.filter(story => {
+        // Apply other active filters but not sprint filter
+        if (filters.issueTypes.length > 0 && !filters.issueTypes.includes(story.issue_type)) return false;
+        if (filters.storyPoints.length > 0) {
+          const storyPointValue = (story.story_points && story.story_points > 0) ? story.story_points : 'none';
+          if (!filters.storyPoints.includes(storyPointValue)) return false;
+        }
+        // Apply date filter
+        if (filters.startDate || filters.endDate) {
+          const createdDate = new Date(story.created);
+          if (filters.startDate && createdDate < new Date(filters.startDate)) return false;
+          if (filters.endDate) {
+            const endDate = new Date(filters.endDate);
+            endDate.setHours(23, 59, 59, 999);
+            if (createdDate > endDate) return false;
+          }
+        }
+        return story.sprint === sprint;
+      }).length
+    }));
+
+    const storyPointCounts = storyPoints.map(points => ({
+      value: points,
+      count: processedStories.filter(story => {
+        // Apply other active filters but not story points filter
+        if (filters.issueTypes.length > 0 && !filters.issueTypes.includes(story.issue_type)) return false;
+        if (filters.sprints.length > 0 && !filters.sprints.includes(story.sprint)) return false;
+        // Apply date filter
+        if (filters.startDate || filters.endDate) {
+          const createdDate = new Date(story.created);
+          if (filters.startDate && createdDate < new Date(filters.startDate)) return false;
+          if (filters.endDate) {
+            const endDate = new Date(filters.endDate);
+            endDate.setHours(23, 59, 59, 999);
+            if (createdDate > endDate) return false;
+          }
+        }
+        const storyPointValue = (story.story_points && story.story_points > 0) ? story.story_points : 'none';
+        return storyPointValue === points;
+      }).length
+    }));
+
+    return { issueTypeCounts, sprintCounts, storyPointCounts };
+  };
+
+  // Filter toggle functions
+  const toggleIssueType = (issueType: string) => {
+    setFilters(prev => ({
+      ...prev,
+      issueTypes: prev.issueTypes.includes(issueType)
+        ? prev.issueTypes.filter(t => t !== issueType)
+        : [...prev.issueTypes, issueType]
+    }));
+  };
+
+  const toggleSprint = (sprint: string) => {
+    setFilters(prev => ({
+      ...prev,
+      sprints: prev.sprints.includes(sprint)
+        ? prev.sprints.filter(s => s !== sprint)
+        : [...prev.sprints, sprint]
+    }));
+  };
+
+  const toggleStoryPoint = (points: number | 'none') => {
+    setFilters(prev => ({
+      ...prev,
+      storyPoints: prev.storyPoints.includes(points)
+        ? prev.storyPoints.filter(p => p !== points)
+        : [...prev.storyPoints, points]
+    }));
+  };
+
+  const setStartDate = (date: string) => {
+    setFilters(prev => ({
+      ...prev,
+      startDate: date
+    }));
+  };
+
+  const setEndDate = (date: string) => {
+    setFilters(prev => ({
+      ...prev,
+      endDate: date
+    }));
+  };
+
+  const clearAllFilters = () => {
+    setFilters({
+      issueTypes: [],
+      sprints: [],
+      storyPoints: [],
+      startDate: '',
+      endDate: ''
+    });
+  };
+
+  const hasActiveFilters = filters.issueTypes.length > 0 || filters.sprints.length > 0 || filters.storyPoints.length > 0 || filters.startDate || filters.endDate;
 
   const calculateCycleTimes = (story: JiraIssue): StoryMetrics => {
     const defaultMetrics: StoryMetrics = {
@@ -158,7 +361,6 @@ const JiraStoryReport = () => {
 
     setLoading(true);
     setError('');
-    setFileName(file.name);
     setProcessedStories([]);
 
     try {
@@ -187,54 +389,52 @@ const JiraStoryReport = () => {
           continue;
         }
         
-        if (issue.issue_type === 'Story') {
-          try {
-            const metrics = calculateCycleTimes(issue);
+        try {
+          const metrics = calculateCycleTimes(issue);
+          
+          // Count sub-issues (child issues where parent_key matches this story's key)
+          const subIssueCount = data.filter((childIssue: unknown) => 
+            childIssue && 
+            typeof childIssue === 'object' &&
+            childIssue !== null &&
+            'parent_key' in childIssue &&
+            (childIssue as { parent_key: string }).parent_key === issue.key
+          ).length;
+          
+          // Get sprint information - use the most recent sprint
+          let sprintName = 'No Sprint';
+          if (issue.sprint_info && Array.isArray(issue.sprint_info) && issue.sprint_info.length > 0) {
+            // Sort by start_date to get the most recent sprint
+            const sortedSprints = issue.sprint_info
+              .filter(sprint => sprint && sprint.name)
+              .sort((a, b) => {
+                if (!a.start_date && !b.start_date) return 0;
+                if (!a.start_date) return -1;
+                if (!b.start_date) return 1;
+                return new Date(b.start_date).getTime() - new Date(a.start_date).getTime();
+              });
             
-            // Count sub-issues (child issues where parent_key matches this story's key)
-            const subIssueCount = data.filter((childIssue: unknown) => 
-              childIssue && 
-              typeof childIssue === 'object' &&
-              childIssue !== null &&
-              'parent_key' in childIssue &&
-              (childIssue as { parent_key: string }).parent_key === issue.key
-            ).length;
-            
-            // Get sprint information - use the most recent sprint
-            let sprintName = 'No Sprint';
-            if (issue.sprint_info && Array.isArray(issue.sprint_info) && issue.sprint_info.length > 0) {
-              // Sort by start_date to get the most recent sprint
-              const sortedSprints = issue.sprint_info
-                .filter(sprint => sprint && sprint.name)
-                .sort((a, b) => {
-                  if (!a.start_date && !b.start_date) return 0;
-                  if (!a.start_date) return -1;
-                  if (!b.start_date) return 1;
-                  return new Date(b.start_date).getTime() - new Date(a.start_date).getTime();
-                });
-              
-              if (sortedSprints.length > 0) {
-                sprintName = sortedSprints[0].name;
-              }
+            if (sortedSprints.length > 0) {
+              sprintName = sortedSprints[0].name;
             }
-            
-            stories.push({
-              id: issue.id || `story-${i}`,
-              key: issue.key || 'Unknown',
-              summary: issue.summary || 'No summary',
-              issue_type: issue.issue_type || 'Unknown',
-              sprint: sprintName,
-              created: issue.created || '',
-              resolved: issue.resolved || undefined,
-              story_points: issue.story_points || undefined,
-              subIssueCount: subIssueCount,
-              metrics: metrics
-            });
-          } catch (storyErr) {
-            console.warn(`Error processing story ${issue.key || i}:`, storyErr);
-            // Skip this story but continue processing others
-            continue;
           }
+          
+          stories.push({
+            id: issue.id || `story-${i}`,
+            key: issue.key || 'Unknown',
+            summary: issue.summary || 'No summary',
+            issue_type: issue.issue_type || 'Unknown',
+            sprint: sprintName,
+            created: issue.created || '',
+            resolved: issue.resolved || undefined,
+            story_points: issue.story_points || undefined,
+            subIssueCount: subIssueCount,
+            metrics: metrics
+          });
+        } catch (storyErr) {
+          console.warn(`Error processing issue ${issue.key || i}:`, storyErr);
+          // Skip this issue but continue processing others
+          continue;
         }
       }
       
@@ -315,7 +515,7 @@ const JiraStoryReport = () => {
 
   const calculateStoryPointsCorrelation = () => {
     // Get stories that have both story points and dev cycle time
-    const validPairs = processedStories
+    const validPairs = filteredStories
       .filter(story => 
         story.story_points && 
         story.story_points > 0 && 
@@ -344,7 +544,7 @@ const JiraStoryReport = () => {
 
   const calculateQAChurnCorrelation = () => {
     // Get stories that have both QA churn and QA cycle time
-    const validPairs = processedStories
+    const validPairs = filteredStories
       .filter(story => 
         story.metrics.qaChurn >= 0 && 
         story.metrics.qaCycleTime !== null && 
@@ -372,7 +572,7 @@ const JiraStoryReport = () => {
 
   // Flow Efficiency: Active Time / Total Lead Time
   const calculateFlowEfficiency = () => {
-    const validStories = processedStories.filter(story => 
+    const validStories = filteredStories.filter(story => 
       story.metrics.leadTime && story.metrics.leadTime > 0
     );
 
@@ -402,7 +602,7 @@ const JiraStoryReport = () => {
     const stageNames = ['Grooming', 'Development', 'QA'];
     
     return stages.map((stage, index) => {
-      const values = processedStories
+      const values = filteredStories
         .map(story => story.metrics[stage])
         .filter((v): v is number => v !== null && v > 0);
       
@@ -426,9 +626,9 @@ const JiraStoryReport = () => {
   // First-Time-Through Rate
   const calculateFirstTimeThrough = () => {
     let firstTimeCount = 0;
-    const totalStories = processedStories.length;
+    const totalStories = filteredStories.length;
 
-    for (const story of processedStories) {
+    for (const story of filteredStories) {
       // True first-time-through means NO rework - zero bounces from review or QA
       const hasNoRework = story.metrics.reviewChurn === 0 && story.metrics.qaChurn === 0;
       if (hasNoRework) {
@@ -472,7 +672,7 @@ const JiraStoryReport = () => {
       'Unestimated': { leadTimes: [], groomingTimes: [], devTimes: [], qaTimes: [], completed: 0 }
     };
 
-    processedStories.forEach(story => {
+    filteredStories.forEach(story => {
       const points = story.story_points || 0;
       const isCompleted = !!story.resolved;
       const leadTime = story.metrics.leadTime;
@@ -523,9 +723,9 @@ const JiraStoryReport = () => {
   const calculateStageSkips = () => {
     let skippedGrooming = 0;
     let skippedReview = 0;
-    const totalStories = processedStories.length;
+    const totalStories = filteredStories.length;
 
-    processedStories.forEach(story => {
+    filteredStories.forEach(story => {
       // If story went directly from Draft/Created to In Progress without Ready for Grooming
       if (!story.metrics.timestamps.readyForGrooming && story.metrics.timestamps.inProgress) {
         skippedGrooming++;
@@ -548,10 +748,10 @@ const JiraStoryReport = () => {
 
   // Blocked Time Analysis
   const calculateBlockedTimeAnalysis = () => {
-    const storiesWithBlocks = processedStories.filter(story => story.metrics.blockers > 0);
+    const storiesWithBlocks = filteredStories.filter(story => story.metrics.blockers > 0);
     
     if (storiesWithBlocks.length === 0) {
-      return { blockedTimeRatio: 0, avgBlockedTime: 0, storiesBlocked: 0, totalStories: processedStories.length };
+      return { blockedTimeRatio: 0, avgBlockedTime: 0, storiesBlocked: 0, totalStories: filteredStories.length };
     }
 
     // Estimate blocked time (rough approximation: 2 days per blocker incident)
@@ -570,7 +770,7 @@ const JiraStoryReport = () => {
       blockedTimeRatio: Math.round(blockedTimeRatio * 10) / 10,
       avgBlockedTime: Math.round(avgBlockedTime * 10) / 10,
       storiesBlocked: storiesWithBlocks.length,
-      totalStories: processedStories.length
+      totalStories: filteredStories.length
     };
   };
 
@@ -812,50 +1012,198 @@ const JiraStoryReport = () => {
   };
 
   const sortStories = (field: string) => {
-    if (!processedStories || processedStories.length === 0) return;
+    let direction: 'asc' | 'desc' = 'desc';
     
-    try {
-      const sorted = [...processedStories].sort((a, b) => {
-        if (!a || !b) return 0;
-        
-        if (field === 'created' || field === 'resolved') {
-          const dateA = new Date(a[field as keyof ProcessedStory] as string || '1970-01-01');
-          const dateB = new Date(b[field as keyof ProcessedStory] as string || '1970-01-01');
-          return dateB.getTime() - dateA.getTime();
-        }
-        
-        if (field.startsWith('metrics.')) {
-          const metricField = field.replace('metrics.', '') as keyof StoryMetrics;
-          const valueA = (a.metrics && typeof a.metrics[metricField] === 'number') ? a.metrics[metricField] as number : 0;
-          const valueB = (b.metrics && typeof b.metrics[metricField] === 'number') ? b.metrics[metricField] as number : 0;
-          return valueB - valueA;
-        }
-        
-        if (field === 'story_points' || field === 'subIssueCount') {
-          const valueA = typeof a[field as keyof ProcessedStory] === 'number' ? a[field as keyof ProcessedStory] as number : 0;
-          const valueB = typeof b[field as keyof ProcessedStory] === 'number' ? b[field as keyof ProcessedStory] as number : 0;
-          return valueB - valueA;
-        }
-        
-        if (field === 'sprint') {
-          const valueA = String(a[field] || '');
-          const valueB = String(b[field] || '');
-          return valueA.localeCompare(valueB);
-        }
-        
-        const valueA = String(a[field as keyof ProcessedStory] || '');
-        const valueB = String(b[field as keyof ProcessedStory] || '');
-        return valueA.localeCompare(valueB);
-      });
-      
-      setProcessedStories(sorted);
-    } catch (sortErr) {
-      console.warn('Error sorting stories:', sortErr);
+    if (sortConfig && sortConfig.key === field && sortConfig.direction === 'desc') {
+      direction = 'asc';
     }
+    
+    setSortConfig({ key: field, direction });
+  };
+
+  // Apply sorting to filtered stories
+  const sortedAndFilteredStories = [...filteredStories].sort((a, b) => {
+    if (!sortConfig) return 0;
+    
+    const { key, direction } = sortConfig;
+    const multiplier = direction === 'asc' ? 1 : -1;
+    
+    if (key === 'key') {
+      return a.key.localeCompare(b.key) * multiplier;
+    }
+    if (key === 'summary') {
+      return a.summary.localeCompare(b.summary) * multiplier;
+    }
+    if (key === 'issue_type') {
+      return a.issue_type.localeCompare(b.issue_type) * multiplier;
+    }
+    if (key === 'sprint') {
+      return a.sprint.localeCompare(b.sprint) * multiplier;
+    }
+    if (key === 'created') {
+      return (new Date(a.created).getTime() - new Date(b.created).getTime()) * multiplier;
+    }
+    if (key === 'resolved') {
+      const aResolved = a.resolved ? new Date(a.resolved).getTime() : 0;
+      const bResolved = b.resolved ? new Date(b.resolved).getTime() : 0;
+      return (aResolved - bResolved) * multiplier;
+    }
+    if (key === 'story_points') {
+      const aPoints = a.story_points || 0;
+      const bPoints = b.story_points || 0;
+      return (aPoints - bPoints) * multiplier;
+    }
+    if (key === 'subIssueCount') {
+      return (a.subIssueCount - b.subIssueCount) * multiplier;
+    }
+    if (key.startsWith('metrics.')) {
+      const metricKey = key.replace('metrics.', '') as keyof StoryMetrics;
+      const aValue = a.metrics[metricKey] || 0;
+      const bValue = b.metrics[metricKey] || 0;
+      return (Number(aValue) - Number(bValue)) * multiplier;
+    }
+    
+    return 0;
+  });
+
+  // Sidebar Filter Component
+  const FilterSidebar = () => {
+    const { issueTypeCounts, sprintCounts, storyPointCounts } = getFilterCounts();
+
+    return (
+      <div className="w-64 bg-gray-50 border-r border-gray-200 p-4 space-y-6 overflow-y-auto h-screen sticky top-0" style={{ minWidth: '256px' }}>
+        <div className="flex items-center justify-between">
+          <h3 className="font-semibold text-gray-900">Filters</h3>
+          {hasActiveFilters && (
+            <button
+              onClick={clearAllFilters}
+              className="text-xs text-blue-600 hover:text-blue-800 underline"
+            >
+              Clear All
+            </button>
+          )}
+        </div>
+
+        {/* Date Range Filter */}
+        <div>
+          <h4 className="font-medium text-gray-700 text-sm mb-3 flex items-center">
+            <CalendarDays className="h-4 w-4 mr-1" />
+            Date Range
+          </h4>
+          <div className="space-y-3">
+            <div>
+              <label className="block text-xs text-gray-600 mb-1">Start Date</label>
+              <input
+                type="date"
+                value={filters.startDate}
+                onChange={(e) => setStartDate(e.target.value)}
+                className="w-full text-sm border border-gray-300 rounded px-2 py-1 focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+              />
+            </div>
+            <div>
+              <label className="block text-xs text-gray-600 mb-1">End Date</label>
+              <input
+                type="date"
+                value={filters.endDate}
+                onChange={(e) => setEndDate(e.target.value)}
+                className="w-full text-sm border border-gray-300 rounded px-2 py-1 focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+              />
+            </div>
+            {(filters.startDate || filters.endDate) && (
+              <button
+                onClick={() => {
+                  setStartDate('');
+                  setEndDate('');
+                }}
+                className="text-xs text-gray-500 hover:text-gray-700 underline"
+              >
+                Clear dates
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Issue Type Filter */}
+        <div>
+          <h4 className="font-medium text-gray-700 text-sm mb-3">Issue Type</h4>
+          <div className="space-y-2 max-h-40 overflow-y-auto">
+            {issueTypeCounts.map(({ value, count }) => (
+              <label key={value} className="flex items-center space-x-2 cursor-pointer hover:bg-gray-100 p-1 rounded">
+                <input
+                  type="checkbox"
+                  checked={filters.issueTypes.includes(value)}
+                  onChange={() => toggleIssueType(value)}
+                  className="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                />
+                <span className="text-sm text-gray-700 flex-1">{value}</span>
+                <span className="text-xs text-gray-500">({count})</span>
+              </label>
+            ))}
+          </div>
+        </div>
+
+        {/* Sprint Filter */}
+        <div>
+          <h4 className="font-medium text-gray-700 text-sm mb-3">Sprint</h4>
+          <div className="space-y-2 max-h-40 overflow-y-auto">
+            {sprintCounts.map(({ value, count }) => (
+              <label key={value} className="flex items-center space-x-2 cursor-pointer hover:bg-gray-100 p-1 rounded">
+                <input
+                  type="checkbox"
+                  checked={filters.sprints.includes(value)}
+                  onChange={() => toggleSprint(value)}
+                  className="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                />
+                <span className="text-sm text-gray-700 flex-1 truncate" title={value}>{value}</span>
+                <span className="text-xs text-gray-500">({count})</span>
+              </label>
+            ))}
+          </div>
+        </div>
+
+        {/* Story Points Filter */}
+        <div>
+          <h4 className="font-medium text-gray-700 text-sm mb-3">Story Points</h4>
+          <div className="space-y-2 max-h-40 overflow-y-auto">
+            {storyPointCounts.map(({ value, count }) => (
+              <label key={value} className="flex items-center space-x-2 cursor-pointer hover:bg-gray-100 p-1 rounded">
+                <input
+                  type="checkbox"
+                  checked={filters.storyPoints.includes(value)}
+                  onChange={() => toggleStoryPoint(value)}
+                  className="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                />
+                <span className="text-sm text-gray-700 flex-1">
+                  {value === 'none' ? 'No Points' : `${value} points`}
+                </span>
+                <span className="text-xs text-gray-500">({count})</span>
+              </label>
+            ))}
+          </div>
+        </div>
+
+        {/* Active Filters Summary */}
+        {hasActiveFilters && (
+          <div className="pt-4 border-t border-gray-200">
+            <h4 className="font-medium text-gray-700 text-sm mb-2">Active Filters</h4>
+            <div className="text-xs text-gray-600">
+              <div>Filtered: {filteredStories.length}</div>
+              <div>Total: {processedStories.length}</div>
+            </div>
+          </div>
+        )}
+      </div>
+    );
   };
 
   return (
-    <div className="max-w-7xl mx-auto p-6 bg-white">
+    <div className="flex min-h-screen bg-white">
+      {/* Filter Sidebar - only show when there are stories */}
+      {processedStories.length > 0 && <FilterSidebar />}
+      
+      {/* Main Content */}
+      <div className="flex-1 p-6 bg-white">
+        <div className="max-w-7xl mx-auto">
       <div className="mb-8">
         <h1 className="text-3xl font-bold text-gray-900 mb-2">JIRA Story Report</h1>
         <p className="text-gray-600">Upload your JIRA JSON export to view all Story issues with cycle time analysis</p>
@@ -879,11 +1227,6 @@ const JiraStoryReport = () => {
           <p className="text-sm text-gray-500 mt-2">
             Select your JIRA export JSON file
           </p>
-          {fileName && (
-            <p className="text-sm text-blue-600 mt-2">
-              📁 {fileName}
-            </p>
-          )}
         </div>
       </div>
 
@@ -910,8 +1253,16 @@ const JiraStoryReport = () => {
         <div>
           <div className="mb-6 flex items-center justify-between">
             <h2 className="text-xl font-semibold text-gray-900">
-              Stories Found: {processedStories.length}
+              Issues: {filteredStories.length} {hasActiveFilters && `of ${processedStories.length}`}
             </h2>
+            {hasActiveFilters && (
+              <button
+                onClick={clearAllFilters}
+                className="text-sm text-blue-600 hover:text-blue-800 underline"
+              >
+                Clear All Filters
+              </button>
+            )}
           </div>
 
           {/* Top Level Metrics */}
@@ -920,22 +1271,22 @@ const JiraStoryReport = () => {
             <div className="grid grid-cols-4 gap-4 mb-4">
               <StatCard 
                 title="Lead Time" 
-                stats={calculateStats(processedStories.map(s => s.metrics.leadTime))} 
+                stats={calculateStats(filteredStories.map(s => s.metrics.leadTime))} 
                 unit=" days" 
               />
               <StatCard 
                 title="Grooming Time" 
-                stats={calculateStats(processedStories.map(s => s.metrics.groomingCycleTime))} 
+                stats={calculateStats(filteredStories.map(s => s.metrics.groomingCycleTime))} 
                 unit=" days" 
               />
               <StatCard 
                 title="Dev Time" 
-                stats={calculateStats(processedStories.map(s => s.metrics.devCycleTime))} 
+                stats={calculateStats(filteredStories.map(s => s.metrics.devCycleTime))} 
                 unit=" days" 
               />
               <StatCard 
                 title="QA Time" 
-                stats={calculateStats(processedStories.map(s => s.metrics.qaCycleTime))} 
+                stats={calculateStats(filteredStories.map(s => s.metrics.qaCycleTime))} 
                 unit=" days" 
               />
             </div>
@@ -1281,7 +1632,7 @@ const JiraStoryReport = () => {
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
-                  {processedStories.map((story, index) => (
+                  {sortedAndFilteredStories.map((story, index) => (
                     <tr key={story.id} className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
                       <td className="px-4 py-4 whitespace-nowrap">
                         <a 
@@ -1397,12 +1748,14 @@ const JiraStoryReport = () => {
         </div>
       )}
 
-      {processedStories.length === 0 && !loading && !error && fileName && (
+      {processedStories.length === 0 && !loading && !error && (
         <div className="text-center py-8 text-gray-500">
           <FileText className="mx-auto h-12 w-12 text-gray-300 mb-4" />
           <p>No stories found in the uploaded file.</p>
         </div>
       )}
+        </div>
+      </div>
     </div>
   );
 };

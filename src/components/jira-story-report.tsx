@@ -222,6 +222,7 @@ const JiraStoryReport = () => {
               id: issue.id || `story-${i}`,
               key: issue.key || 'Unknown',
               summary: issue.summary || 'No summary',
+              issue_type: issue.issue_type || 'Unknown',
               sprint: sprintName,
               created: issue.created || '',
               resolved: issue.resolved || undefined,
@@ -1113,6 +1114,12 @@ const JiraStoryReport = () => {
                       Issue Key
                     </th>
                     <th 
+                      className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                      onClick={() => sortStories('issue_type')}
+                    >
+                      Type
+                    </th>
+                    <th 
                       className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
                       onClick={() => sortStories('summary')}
                     >
@@ -1285,6 +1292,11 @@ const JiraStoryReport = () => {
                         >
                           {story.key}
                         </a>
+                      </td>
+                      <td className="px-3 py-4 whitespace-nowrap">
+                        <span className="text-sm text-gray-700">
+                          {story.issue_type || 'Unknown'}
+                        </span>
                       </td>
                       <td className="px-4 py-4">
                         <div className="text-sm text-gray-900 max-w-xs truncate">

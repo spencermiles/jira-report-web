@@ -50,6 +50,7 @@ export interface ProcessedStory {
   id: string;
   key: string;
   summary: string;
+  issue_type: string;
   sprint: string;
   created: string;
   resolved?: string;

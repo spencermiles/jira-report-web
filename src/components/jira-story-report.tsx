@@ -935,6 +935,296 @@ const JiraIssueReport = () => {
       .sort((a, b) => a.date.localeCompare(b.date));
   };
 
+  // Dev cycle time trend data processing
+  const getDevCycleTrendData = () => {
+    // Get stories with both resolved date and dev cycle time
+    const validStories = filteredStories
+      .filter(story => 
+        story.resolved && 
+        story.metrics.devCycleTime !== null && 
+        story.metrics.devCycleTime > 0
+      )
+      .map(story => ({
+        resolvedDate: new Date(story.resolved!),
+        devCycleTime: story.metrics.devCycleTime!,
+        key: story.key
+      }))
+      .sort((a, b) => a.resolvedDate.getTime() - b.resolvedDate.getTime());
+
+    if (validStories.length === 0) {
+      return { weeklyData: [], rawData: [] };
+    }
+
+    // Helper function to get week start (Monday)
+    const getWeekStart = (date: Date): string => {
+      const d = new Date(date);
+      const day = d.getDay();
+      const diff = d.getDate() - day + (day === 0 ? -6 : 1); // Adjust for Sunday
+      d.setDate(diff);
+      return d.toISOString().split('T')[0];
+    };
+
+    // Group by week and calculate weekly averages
+    const weeklyGroups: Record<string, number[]> = {};
+    
+    validStories.forEach(story => {
+      const weekStart = getWeekStart(story.resolvedDate);
+      if (!weeklyGroups[weekStart]) {
+        weeklyGroups[weekStart] = [];
+      }
+      weeklyGroups[weekStart].push(story.devCycleTime);
+    });
+
+    // Calculate weekly averages and moving averages
+    const weeklyData = Object.entries(weeklyGroups)
+      .map(([week, cycleTimes]) => ({
+        week,
+        avgCycleTime: Math.round((cycleTimes.reduce((sum, time) => sum + time, 0) / cycleTimes.length) * 10) / 10,
+        medianCycleTime: cycleTimes.length > 0 ? 
+          cycleTimes.sort((a, b) => a - b)[Math.floor(cycleTimes.length / 2)] : 0,
+        count: cycleTimes.length
+      }))
+      .sort((a, b) => a.week.localeCompare(b.week));
+
+    // Calculate 4-week moving average
+    const movingAverageWindow = 4;
+    const weeklyDataWithMA = weeklyData.map((item, index) => {
+      let movingAverage = item.avgCycleTime;
+      
+      if (index >= movingAverageWindow - 1) {
+        const windowData = weeklyData.slice(index - movingAverageWindow + 1, index + 1);
+        movingAverage = Math.round((windowData.reduce((sum, d) => sum + d.avgCycleTime, 0) / windowData.length) * 10) / 10;
+      }
+      
+      return {
+        ...item,
+        movingAverage
+      };
+    });
+
+    // Raw data for scatter plot
+    const rawData = validStories.map(story => ({
+      date: story.resolvedDate.toISOString().split('T')[0],
+      devCycleTime: story.devCycleTime,
+      key: story.key
+    }));
+
+    return { weeklyData: weeklyDataWithMA, rawData };
+  };
+
+  // Lead time trend data processing
+  const getLeadTimeTrendData = () => {
+    const validStories = filteredStories
+      .filter(story => 
+        story.resolved && 
+        story.metrics.leadTime !== null && 
+        story.metrics.leadTime > 0
+      )
+      .map(story => ({
+        resolvedDate: new Date(story.resolved!),
+        leadTime: story.metrics.leadTime!,
+        key: story.key
+      }))
+      .sort((a, b) => a.resolvedDate.getTime() - b.resolvedDate.getTime());
+
+    if (validStories.length === 0) {
+      return { weeklyData: [], rawData: [] };
+    }
+
+    const getWeekStart = (date: Date): string => {
+      const d = new Date(date);
+      const day = d.getDay();
+      const diff = d.getDate() - day + (day === 0 ? -6 : 1);
+      d.setDate(diff);
+      return d.toISOString().split('T')[0];
+    };
+
+    const weeklyGroups: Record<string, number[]> = {};
+    
+    validStories.forEach(story => {
+      const weekStart = getWeekStart(story.resolvedDate);
+      if (!weeklyGroups[weekStart]) {
+        weeklyGroups[weekStart] = [];
+      }
+      weeklyGroups[weekStart].push(story.leadTime);
+    });
+
+    const weeklyData = Object.entries(weeklyGroups)
+      .map(([week, leadTimes]) => ({
+        week,
+        avgCycleTime: Math.round((leadTimes.reduce((sum, time) => sum + time, 0) / leadTimes.length) * 10) / 10,
+        medianCycleTime: leadTimes.length > 0 ? 
+          leadTimes.sort((a, b) => a - b)[Math.floor(leadTimes.length / 2)] : 0,
+        count: leadTimes.length
+      }))
+      .sort((a, b) => a.week.localeCompare(b.week));
+
+    const movingAverageWindow = 4;
+    const weeklyDataWithMA = weeklyData.map((item, index) => {
+      let movingAverage = item.avgCycleTime;
+      
+      if (index >= movingAverageWindow - 1) {
+        const windowData = weeklyData.slice(index - movingAverageWindow + 1, index + 1);
+        movingAverage = Math.round((windowData.reduce((sum, d) => sum + d.avgCycleTime, 0) / windowData.length) * 10) / 10;
+      }
+      
+      return {
+        ...item,
+        movingAverage
+      };
+    });
+
+    const rawData = validStories.map(story => ({
+      date: story.resolvedDate.toISOString().split('T')[0],
+      cycleTime: story.leadTime,
+      key: story.key
+    }));
+
+    return { weeklyData: weeklyDataWithMA, rawData };
+  };
+
+  // Grooming cycle time trend data processing
+  const getGroomingCycleTrendData = () => {
+    const validStories = filteredStories
+      .filter(story => 
+        story.resolved && 
+        story.metrics.groomingCycleTime !== null && 
+        story.metrics.groomingCycleTime > 0
+      )
+      .map(story => ({
+        resolvedDate: new Date(story.resolved!),
+        groomingCycleTime: story.metrics.groomingCycleTime!,
+        key: story.key
+      }))
+      .sort((a, b) => a.resolvedDate.getTime() - b.resolvedDate.getTime());
+
+    if (validStories.length === 0) {
+      return { weeklyData: [], rawData: [] };
+    }
+
+    const getWeekStart = (date: Date): string => {
+      const d = new Date(date);
+      const day = d.getDay();
+      const diff = d.getDate() - day + (day === 0 ? -6 : 1);
+      d.setDate(diff);
+      return d.toISOString().split('T')[0];
+    };
+
+    const weeklyGroups: Record<string, number[]> = {};
+    
+    validStories.forEach(story => {
+      const weekStart = getWeekStart(story.resolvedDate);
+      if (!weeklyGroups[weekStart]) {
+        weeklyGroups[weekStart] = [];
+      }
+      weeklyGroups[weekStart].push(story.groomingCycleTime);
+    });
+
+    const weeklyData = Object.entries(weeklyGroups)
+      .map(([week, cycleTimes]) => ({
+        week,
+        avgCycleTime: Math.round((cycleTimes.reduce((sum, time) => sum + time, 0) / cycleTimes.length) * 10) / 10,
+        medianCycleTime: cycleTimes.length > 0 ? 
+          cycleTimes.sort((a, b) => a - b)[Math.floor(cycleTimes.length / 2)] : 0,
+        count: cycleTimes.length
+      }))
+      .sort((a, b) => a.week.localeCompare(b.week));
+
+    const movingAverageWindow = 4;
+    const weeklyDataWithMA = weeklyData.map((item, index) => {
+      let movingAverage = item.avgCycleTime;
+      
+      if (index >= movingAverageWindow - 1) {
+        const windowData = weeklyData.slice(index - movingAverageWindow + 1, index + 1);
+        movingAverage = Math.round((windowData.reduce((sum, d) => sum + d.avgCycleTime, 0) / windowData.length) * 10) / 10;
+      }
+      
+      return {
+        ...item,
+        movingAverage
+      };
+    });
+
+    const rawData = validStories.map(story => ({
+      date: story.resolvedDate.toISOString().split('T')[0],
+      cycleTime: story.groomingCycleTime,
+      key: story.key
+    }));
+
+    return { weeklyData: weeklyDataWithMA, rawData };
+  };
+
+  // QA cycle time trend data processing
+  const getQACycleTrendData = () => {
+    const validStories = filteredStories
+      .filter(story => 
+        story.resolved && 
+        story.metrics.qaCycleTime !== null && 
+        story.metrics.qaCycleTime > 0
+      )
+      .map(story => ({
+        resolvedDate: new Date(story.resolved!),
+        qaCycleTime: story.metrics.qaCycleTime!,
+        key: story.key
+      }))
+      .sort((a, b) => a.resolvedDate.getTime() - b.resolvedDate.getTime());
+
+    if (validStories.length === 0) {
+      return { weeklyData: [], rawData: [] };
+    }
+
+    const getWeekStart = (date: Date): string => {
+      const d = new Date(date);
+      const day = d.getDay();
+      const diff = d.getDate() - day + (day === 0 ? -6 : 1);
+      d.setDate(diff);
+      return d.toISOString().split('T')[0];
+    };
+
+    const weeklyGroups: Record<string, number[]> = {};
+    
+    validStories.forEach(story => {
+      const weekStart = getWeekStart(story.resolvedDate);
+      if (!weeklyGroups[weekStart]) {
+        weeklyGroups[weekStart] = [];
+      }
+      weeklyGroups[weekStart].push(story.qaCycleTime);
+    });
+
+    const weeklyData = Object.entries(weeklyGroups)
+      .map(([week, cycleTimes]) => ({
+        week,
+        avgCycleTime: Math.round((cycleTimes.reduce((sum, time) => sum + time, 0) / cycleTimes.length) * 10) / 10,
+        medianCycleTime: cycleTimes.length > 0 ? 
+          cycleTimes.sort((a, b) => a - b)[Math.floor(cycleTimes.length / 2)] : 0,
+        count: cycleTimes.length
+      }))
+      .sort((a, b) => a.week.localeCompare(b.week));
+
+    const movingAverageWindow = 4;
+    const weeklyDataWithMA = weeklyData.map((item, index) => {
+      let movingAverage = item.avgCycleTime;
+      
+      if (index >= movingAverageWindow - 1) {
+        const windowData = weeklyData.slice(index - movingAverageWindow + 1, index + 1);
+        movingAverage = Math.round((windowData.reduce((sum, d) => sum + d.avgCycleTime, 0) / windowData.length) * 10) / 10;
+      }
+      
+      return {
+        ...item,
+        movingAverage
+      };
+    });
+
+    const rawData = validStories.map(story => ({
+      date: story.resolvedDate.toISOString().split('T')[0],
+      cycleTime: story.qaCycleTime,
+      key: story.key
+    }));
+
+    return { weeklyData: weeklyDataWithMA, rawData };
+  };
+
   const SimpleHistogram = ({ 
     data, 
     title, 
@@ -1140,6 +1430,620 @@ const JiraIssueReport = () => {
         <h3 className="text-lg font-semibold text-gray-900 mb-4">{title}</h3>
         <div style={{ height: `${height}px` }}>
           <Line data={chartData} options={options} />
+        </div>
+      </div>
+    );
+  };
+
+  const DevCycleTrendChart = ({ 
+    height = 400
+  }: { 
+    height?: number;
+  }) => {
+    const { weeklyData, rawData } = getDevCycleTrendData();
+    
+    if (weeklyData.length === 0) {
+      return (
+        <div className="bg-white border border-gray-200 rounded-lg p-6">
+          <h3 className="text-lg font-semibold text-gray-900 mb-4">Development Cycle Time Trend</h3>
+          <div className="flex items-center justify-center h-64 text-gray-500">
+            No development cycle time data available
+          </div>
+        </div>
+      );
+    }
+
+    // Format week dates for display
+    const formatWeekLabel = (weekStr: string) => {
+      try {
+        return new Date(weekStr).toLocaleDateString('en-US', { 
+          month: 'short', 
+          day: 'numeric' 
+        });
+      } catch {
+        return weekStr;
+      }
+    };
+
+    // Calculate overall median for reference line
+    const allDevTimes = rawData.map(d => d.devCycleTime);
+    const overallMedian = allDevTimes.length > 0 ? 
+      allDevTimes.sort((a, b) => a - b)[Math.floor(allDevTimes.length / 2)] : 0;
+
+    const chartData = {
+      labels: weeklyData.map(d => formatWeekLabel(d.week)),
+      datasets: [
+        {
+          type: 'line' as const,
+          label: 'Weekly Average',
+          data: weeklyData.map(d => d.avgCycleTime),
+          borderColor: '#3b82f6',
+          backgroundColor: 'rgba(59, 130, 246, 0.1)',
+          borderWidth: 2,
+          fill: false,
+          tension: 0.1,
+          pointRadius: 4,
+          pointHoverRadius: 6,
+        },
+        {
+          type: 'line' as const,
+          label: '4-Week Moving Average',
+          data: weeklyData.map(d => d.movingAverage),
+          borderColor: '#ef4444',
+          backgroundColor: 'rgba(239, 68, 68, 0.1)',
+          borderWidth: 3,
+          fill: false,
+          tension: 0.2,
+          pointRadius: 0,
+          pointHoverRadius: 4,
+        },
+        {
+          type: 'line' as const,
+          label: `Overall Median (${overallMedian} days)`,
+          data: weeklyData.map(() => overallMedian),
+          borderColor: '#6b7280',
+          backgroundColor: 'rgba(107, 114, 128, 0.1)',
+          borderWidth: 1,
+          borderDash: [5, 5],
+          fill: false,
+          pointRadius: 0,
+          pointHoverRadius: 0,
+        },
+      ],
+    };
+
+    const options = {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        title: {
+          display: false,
+        },
+        legend: {
+          position: 'bottom' as const,
+          labels: {
+            usePointStyle: true,
+            padding: 20,
+          },
+        },
+        tooltip: {
+          callbacks: {
+            afterBody: (context: any) => {
+              const dataIndex = context[0]?.dataIndex;
+              if (dataIndex !== undefined && weeklyData[dataIndex]) {
+                const week = weeklyData[dataIndex];
+                return [
+                  `Issues this week: ${week.count}`,
+                  `Median: ${week.medianCycleTime} days`
+                ];
+              }
+              return [];
+            }
+          }
+        }
+      },
+      scales: {
+        x: {
+          grid: {
+            display: false,
+          },
+          ticks: {
+            maxTicksLimit: 12,
+          },
+        },
+        y: {
+          beginAtZero: true,
+          grid: {
+            color: '#f3f4f6',
+          },
+          title: {
+            display: true,
+            text: 'Development Cycle Time (days)'
+          }
+        },
+      },
+      interaction: {
+        intersect: false,
+        mode: 'index' as const,
+      },
+    };
+    
+    return (
+      <div className="bg-white border border-gray-200 rounded-lg p-6">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-lg font-semibold text-gray-900">Development Cycle Time Trend</h3>
+          <div className="text-sm text-gray-500">
+            {rawData.length} resolved issues
+          </div>
+        </div>
+        
+        <div style={{ height: `${height}px` }}>
+          <Line data={chartData} options={options} />
+        </div>
+        
+        <div className="mt-4 text-sm text-gray-600">
+          <p><strong>Weekly Average:</strong> Average dev cycle time for issues resolved each week</p>
+          <p><strong>4-Week Moving Average:</strong> Smoothed trend line showing overall direction</p>
+          <p><strong>Overall Median:</strong> Reference line for comparison ({overallMedian} days)</p>
+        </div>
+      </div>
+    );
+  };
+
+  const LeadTimeTrendChart = ({ 
+    height = 400
+  }: { 
+    height?: number;
+  }) => {
+    const { weeklyData, rawData } = getLeadTimeTrendData();
+    
+    if (weeklyData.length === 0) {
+      return (
+        <div className="bg-white border border-gray-200 rounded-lg p-6">
+          <h3 className="text-lg font-semibold text-gray-900 mb-4">Lead Time Trend</h3>
+          <div className="flex items-center justify-center h-64 text-gray-500">
+            No lead time data available
+          </div>
+        </div>
+      );
+    }
+
+    const formatWeekLabel = (weekStr: string) => {
+      try {
+        return new Date(weekStr).toLocaleDateString('en-US', { 
+          month: 'short', 
+          day: 'numeric' 
+        });
+      } catch {
+        return weekStr;
+      }
+    };
+
+    const allTimes = rawData.map(d => d.cycleTime);
+    const overallMedian = allTimes.length > 0 ? 
+      allTimes.sort((a, b) => a - b)[Math.floor(allTimes.length / 2)] : 0;
+
+    const chartData = {
+      labels: weeklyData.map(d => formatWeekLabel(d.week)),
+      datasets: [
+        {
+          type: 'line' as const,
+          label: 'Weekly Average',
+          data: weeklyData.map(d => d.avgCycleTime),
+          borderColor: '#8b5cf6',
+          backgroundColor: 'rgba(139, 92, 246, 0.1)',
+          borderWidth: 2,
+          fill: false,
+          tension: 0.1,
+          pointRadius: 4,
+          pointHoverRadius: 6,
+        },
+        {
+          type: 'line' as const,
+          label: '4-Week Moving Average',
+          data: weeklyData.map(d => d.movingAverage),
+          borderColor: '#ef4444',
+          backgroundColor: 'rgba(239, 68, 68, 0.1)',
+          borderWidth: 3,
+          fill: false,
+          tension: 0.2,
+          pointRadius: 0,
+          pointHoverRadius: 4,
+        },
+        {
+          type: 'line' as const,
+          label: `Overall Median (${overallMedian} days)`,
+          data: weeklyData.map(() => overallMedian),
+          borderColor: '#6b7280',
+          backgroundColor: 'rgba(107, 114, 128, 0.1)',
+          borderWidth: 1,
+          borderDash: [5, 5],
+          fill: false,
+          pointRadius: 0,
+          pointHoverRadius: 0,
+        },
+      ],
+    };
+
+    const options = {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        title: {
+          display: false,
+        },
+        legend: {
+          position: 'bottom' as const,
+          labels: {
+            usePointStyle: true,
+            padding: 20,
+          },
+        },
+        tooltip: {
+          callbacks: {
+            afterBody: (context: any) => {
+              const dataIndex = context[0]?.dataIndex;
+              if (dataIndex !== undefined && weeklyData[dataIndex]) {
+                const week = weeklyData[dataIndex];
+                return [
+                  `Issues this week: ${week.count}`,
+                  `Median: ${week.medianCycleTime} days`
+                ];
+              }
+              return [];
+            }
+          }
+        }
+      },
+      scales: {
+        x: {
+          grid: {
+            display: false,
+          },
+          ticks: {
+            maxTicksLimit: 12,
+          },
+        },
+        y: {
+          beginAtZero: true,
+          grid: {
+            color: '#f3f4f6',
+          },
+          title: {
+            display: true,
+            text: 'Lead Time (days)'
+          }
+        },
+      },
+      interaction: {
+        intersect: false,
+        mode: 'index' as const,
+      },
+    };
+    
+    return (
+      <div className="bg-white border border-gray-200 rounded-lg p-6">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-lg font-semibold text-gray-900">Lead Time Trend</h3>
+          <div className="text-sm text-gray-500">
+            {rawData.length} resolved issues
+          </div>
+        </div>
+        
+        <div style={{ height: `${height}px` }}>
+          <Line data={chartData} options={options} />
+        </div>
+        
+        <div className="mt-4 text-sm text-gray-600">
+          <p><strong>Weekly Average:</strong> Average lead time for issues resolved each week</p>
+          <p><strong>4-Week Moving Average:</strong> Smoothed trend line showing overall direction</p>
+          <p><strong>Overall Median:</strong> Reference line for comparison ({overallMedian} days)</p>
+        </div>
+      </div>
+    );
+  };
+
+  const GroomingCycleTrendChart = ({ 
+    height = 400
+  }: { 
+    height?: number;
+  }) => {
+    const { weeklyData, rawData } = getGroomingCycleTrendData();
+    
+    if (weeklyData.length === 0) {
+      return (
+        <div className="bg-white border border-gray-200 rounded-lg p-6">
+          <h3 className="text-lg font-semibold text-gray-900 mb-4">Grooming Cycle Time Trend</h3>
+          <div className="flex items-center justify-center h-64 text-gray-500">
+            No grooming cycle time data available
+          </div>
+        </div>
+      );
+    }
+
+    const formatWeekLabel = (weekStr: string) => {
+      try {
+        return new Date(weekStr).toLocaleDateString('en-US', { 
+          month: 'short', 
+          day: 'numeric' 
+        });
+      } catch {
+        return weekStr;
+      }
+    };
+
+    const allTimes = rawData.map(d => d.cycleTime);
+    const overallMedian = allTimes.length > 0 ? 
+      allTimes.sort((a, b) => a - b)[Math.floor(allTimes.length / 2)] : 0;
+
+    const chartData = {
+      labels: weeklyData.map(d => formatWeekLabel(d.week)),
+      datasets: [
+        {
+          type: 'line' as const,
+          label: 'Weekly Average',
+          data: weeklyData.map(d => d.avgCycleTime),
+          borderColor: '#f59e0b',
+          backgroundColor: 'rgba(245, 158, 11, 0.1)',
+          borderWidth: 2,
+          fill: false,
+          tension: 0.1,
+          pointRadius: 4,
+          pointHoverRadius: 6,
+        },
+        {
+          type: 'line' as const,
+          label: '4-Week Moving Average',
+          data: weeklyData.map(d => d.movingAverage),
+          borderColor: '#ef4444',
+          backgroundColor: 'rgba(239, 68, 68, 0.1)',
+          borderWidth: 3,
+          fill: false,
+          tension: 0.2,
+          pointRadius: 0,
+          pointHoverRadius: 4,
+        },
+        {
+          type: 'line' as const,
+          label: `Overall Median (${overallMedian} days)`,
+          data: weeklyData.map(() => overallMedian),
+          borderColor: '#6b7280',
+          backgroundColor: 'rgba(107, 114, 128, 0.1)',
+          borderWidth: 1,
+          borderDash: [5, 5],
+          fill: false,
+          pointRadius: 0,
+          pointHoverRadius: 0,
+        },
+      ],
+    };
+
+    const options = {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        title: {
+          display: false,
+        },
+        legend: {
+          position: 'bottom' as const,
+          labels: {
+            usePointStyle: true,
+            padding: 20,
+          },
+        },
+        tooltip: {
+          callbacks: {
+            afterBody: (context: any) => {
+              const dataIndex = context[0]?.dataIndex;
+              if (dataIndex !== undefined && weeklyData[dataIndex]) {
+                const week = weeklyData[dataIndex];
+                return [
+                  `Issues this week: ${week.count}`,
+                  `Median: ${week.medianCycleTime} days`
+                ];
+              }
+              return [];
+            }
+          }
+        }
+      },
+      scales: {
+        x: {
+          grid: {
+            display: false,
+          },
+          ticks: {
+            maxTicksLimit: 12,
+          },
+        },
+        y: {
+          beginAtZero: true,
+          grid: {
+            color: '#f3f4f6',
+          },
+          title: {
+            display: true,
+            text: 'Grooming Cycle Time (days)'
+          }
+        },
+      },
+      interaction: {
+        intersect: false,
+        mode: 'index' as const,
+      },
+    };
+    
+    return (
+      <div className="bg-white border border-gray-200 rounded-lg p-6">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-lg font-semibold text-gray-900">Grooming Cycle Time Trend</h3>
+          <div className="text-sm text-gray-500">
+            {rawData.length} resolved issues
+          </div>
+        </div>
+        
+        <div style={{ height: `${height}px` }}>
+          <Line data={chartData} options={options} />
+        </div>
+        
+        <div className="mt-4 text-sm text-gray-600">
+          <p><strong>Weekly Average:</strong> Average grooming cycle time for issues resolved each week</p>
+          <p><strong>4-Week Moving Average:</strong> Smoothed trend line showing overall direction</p>
+          <p><strong>Overall Median:</strong> Reference line for comparison ({overallMedian} days)</p>
+        </div>
+      </div>
+    );
+  };
+
+  const QACycleTrendChart = ({ 
+    height = 400
+  }: { 
+    height?: number;
+  }) => {
+    const { weeklyData, rawData } = getQACycleTrendData();
+    
+    if (weeklyData.length === 0) {
+      return (
+        <div className="bg-white border border-gray-200 rounded-lg p-6">
+          <h3 className="text-lg font-semibold text-gray-900 mb-4">QA Cycle Time Trend</h3>
+          <div className="flex items-center justify-center h-64 text-gray-500">
+            No QA cycle time data available
+          </div>
+        </div>
+      );
+    }
+
+    const formatWeekLabel = (weekStr: string) => {
+      try {
+        return new Date(weekStr).toLocaleDateString('en-US', { 
+          month: 'short', 
+          day: 'numeric' 
+        });
+      } catch {
+        return weekStr;
+      }
+    };
+
+    const allTimes = rawData.map(d => d.cycleTime);
+    const overallMedian = allTimes.length > 0 ? 
+      allTimes.sort((a, b) => a - b)[Math.floor(allTimes.length / 2)] : 0;
+
+    const chartData = {
+      labels: weeklyData.map(d => formatWeekLabel(d.week)),
+      datasets: [
+        {
+          type: 'line' as const,
+          label: 'Weekly Average',
+          data: weeklyData.map(d => d.avgCycleTime),
+          borderColor: '#10b981',
+          backgroundColor: 'rgba(16, 185, 129, 0.1)',
+          borderWidth: 2,
+          fill: false,
+          tension: 0.1,
+          pointRadius: 4,
+          pointHoverRadius: 6,
+        },
+        {
+          type: 'line' as const,
+          label: '4-Week Moving Average',
+          data: weeklyData.map(d => d.movingAverage),
+          borderColor: '#ef4444',
+          backgroundColor: 'rgba(239, 68, 68, 0.1)',
+          borderWidth: 3,
+          fill: false,
+          tension: 0.2,
+          pointRadius: 0,
+          pointHoverRadius: 4,
+        },
+        {
+          type: 'line' as const,
+          label: `Overall Median (${overallMedian} days)`,
+          data: weeklyData.map(() => overallMedian),
+          borderColor: '#6b7280',
+          backgroundColor: 'rgba(107, 114, 128, 0.1)',
+          borderWidth: 1,
+          borderDash: [5, 5],
+          fill: false,
+          pointRadius: 0,
+          pointHoverRadius: 0,
+        },
+      ],
+    };
+
+    const options = {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        title: {
+          display: false,
+        },
+        legend: {
+          position: 'bottom' as const,
+          labels: {
+            usePointStyle: true,
+            padding: 20,
+          },
+        },
+        tooltip: {
+          callbacks: {
+            afterBody: (context: any) => {
+              const dataIndex = context[0]?.dataIndex;
+              if (dataIndex !== undefined && weeklyData[dataIndex]) {
+                const week = weeklyData[dataIndex];
+                return [
+                  `Issues this week: ${week.count}`,
+                  `Median: ${week.medianCycleTime} days`
+                ];
+              }
+              return [];
+            }
+          }
+        }
+      },
+      scales: {
+        x: {
+          grid: {
+            display: false,
+          },
+          ticks: {
+            maxTicksLimit: 12,
+          },
+        },
+        y: {
+          beginAtZero: true,
+          grid: {
+            color: '#f3f4f6',
+          },
+          title: {
+            display: true,
+            text: 'QA Cycle Time (days)'
+          }
+        },
+      },
+      interaction: {
+        intersect: false,
+        mode: 'index' as const,
+      },
+    };
+    
+    return (
+      <div className="bg-white border border-gray-200 rounded-lg p-6">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-lg font-semibold text-gray-900">QA Cycle Time Trend</h3>
+          <div className="text-sm text-gray-500">
+            {rawData.length} resolved issues
+          </div>
+        </div>
+        
+        <div style={{ height: `${height}px` }}>
+          <Line data={chartData} options={options} />
+        </div>
+        
+        <div className="mt-4 text-sm text-gray-600">
+          <p><strong>Weekly Average:</strong> Average QA cycle time for issues resolved each week</p>
+          <p><strong>4-Week Moving Average:</strong> Smoothed trend line showing overall direction</p>
+          <p><strong>Overall Median:</strong> Reference line for comparison ({overallMedian} days)</p>
         </div>
       </div>
     );
@@ -2278,22 +3182,52 @@ const JiraIssueReport = () => {
                 <p className="text-gray-600">Visual analysis of issue creation and resolution patterns over time</p>
               </div>
 
-              {/* Daily Activity Histogram */}
+              {/* Cycle Time Trend Charts */}
               <div className="mb-8">
-                <SimpleHistogram
-                  data={getCreatedResolvedData()}
-                  title="Daily Issues Created vs Resolved"
-                  height={400}
-                />
+                <h3 className="text-lg font-semibold text-gray-900 mb-6">Cycle Time Trends</h3>
+                
+                {/* Lead Time Trend */}
+                <div className="mb-8">
+                  <LeadTimeTrendChart />
+                </div>
+
+                {/* Grooming Cycle Time Trend */}
+                <div className="mb-8">
+                  <GroomingCycleTrendChart />
+                </div>
+
+                {/* Development Cycle Time Trend */}
+                <div className="mb-8">
+                  <DevCycleTrendChart />
+                </div>
+
+                {/* QA Cycle Time Trend */}
+                <div className="mb-8">
+                  <QACycleTrendChart />
+                </div>
               </div>
 
-              {/* Cumulative Trend Chart */}
+              {/* Issue Activity Charts */}
               <div className="mb-8">
-                <CumulativeLineChart
-                  data={getCreatedResolvedData()}
-                  title="Cumulative Issues Created vs Resolved Over Time"
-                  height={400}
-                />
+                <h3 className="text-lg font-semibold text-gray-900 mb-6">Issue Activity</h3>
+
+                {/* Daily Activity Histogram */}
+                <div className="mb-8">
+                  <SimpleHistogram
+                    data={getCreatedResolvedData()}
+                    title="Daily Issues Created vs Resolved"
+                    height={400}
+                  />
+                </div>
+
+                {/* Cumulative Trend Chart */}
+                <div className="mb-8">
+                  <CumulativeLineChart
+                    data={getCreatedResolvedData()}
+                    title="Cumulative Issues Created vs Resolved Over Time"
+                    height={400}
+                  />
+                </div>
               </div>
 
               {/* Summary Statistics */}

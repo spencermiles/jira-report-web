@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Upload, FileText, Calendar, AlertCircle, HelpCircle, CalendarDays } from 'lucide-react';
+import { Upload, FileText, Calendar, AlertCircle, HelpCircle, CalendarDays, ChevronDown, ChevronRight } from 'lucide-react';
 import { 
   JiraIssue, 
   ProcessedStory, 
@@ -22,8 +22,19 @@ const JiraStoryReport = () => {
     issueTypes: [] as string[],
     sprints: [] as string[],
     storyPoints: [] as (number | 'none')[],
-    startDate: '' as string,
-    endDate: '' as string
+    createdStartDate: '' as string,
+    createdEndDate: '' as string,
+    resolvedStartDate: '' as string,
+    resolvedEndDate: '' as string
+  });
+
+  // Accordion states - all collapsed by default
+  const [accordionStates, setAccordionStates] = useState({
+    createdDate: false,
+    resolvedDate: false,
+    issueType: false,
+    sprint: false,
+    storyPoints: false
   });
 
   // Get unique values for filters
@@ -69,21 +80,46 @@ const JiraStoryReport = () => {
       }
     }
 
-    // Date range filter
-    if (filters.startDate || filters.endDate) {
+    // Created date range filter
+    if (filters.createdStartDate || filters.createdEndDate) {
       const createdDate = new Date(story.created);
       
-      if (filters.startDate) {
-        const startDate = new Date(filters.startDate);
+      if (filters.createdStartDate) {
+        const startDate = new Date(filters.createdStartDate);
         if (createdDate < startDate) {
           return false;
         }
       }
       
-      if (filters.endDate) {
-        const endDate = new Date(filters.endDate);
+      if (filters.createdEndDate) {
+        const endDate = new Date(filters.createdEndDate);
         endDate.setHours(23, 59, 59, 999); // Include the entire end date
         if (createdDate > endDate) {
+          return false;
+        }
+      }
+    }
+
+    // Resolved date range filter
+    if (filters.resolvedStartDate || filters.resolvedEndDate) {
+      if (!story.resolved) {
+        // If looking for resolved dates but story isn't resolved, exclude it
+        return false;
+      }
+      
+      const resolvedDate = new Date(story.resolved);
+      
+      if (filters.resolvedStartDate) {
+        const startDate = new Date(filters.resolvedStartDate);
+        if (resolvedDate < startDate) {
+          return false;
+        }
+      }
+      
+      if (filters.resolvedEndDate) {
+        const endDate = new Date(filters.resolvedEndDate);
+        endDate.setHours(23, 59, 59, 999); // Include the entire end date
+        if (resolvedDate > endDate) {
           return false;
         }
       }
@@ -105,14 +141,24 @@ const JiraStoryReport = () => {
           const storyPointValue = (story.story_points && story.story_points > 0) ? story.story_points : 'none';
           if (!filters.storyPoints.includes(storyPointValue)) return false;
         }
-        // Apply date filter
-        if (filters.startDate || filters.endDate) {
+        // Apply date filters
+        if (filters.createdStartDate || filters.createdEndDate) {
           const createdDate = new Date(story.created);
-          if (filters.startDate && createdDate < new Date(filters.startDate)) return false;
-          if (filters.endDate) {
-            const endDate = new Date(filters.endDate);
+          if (filters.createdStartDate && createdDate < new Date(filters.createdStartDate)) return false;
+          if (filters.createdEndDate) {
+            const endDate = new Date(filters.createdEndDate);
             endDate.setHours(23, 59, 59, 999);
             if (createdDate > endDate) return false;
+          }
+        }
+        if (filters.resolvedStartDate || filters.resolvedEndDate) {
+          if (!story.resolved) return false;
+          const resolvedDate = new Date(story.resolved);
+          if (filters.resolvedStartDate && resolvedDate < new Date(filters.resolvedStartDate)) return false;
+          if (filters.resolvedEndDate) {
+            const endDate = new Date(filters.resolvedEndDate);
+            endDate.setHours(23, 59, 59, 999);
+            if (resolvedDate > endDate) return false;
           }
         }
         return story.issue_type === type;
@@ -128,14 +174,24 @@ const JiraStoryReport = () => {
           const storyPointValue = (story.story_points && story.story_points > 0) ? story.story_points : 'none';
           if (!filters.storyPoints.includes(storyPointValue)) return false;
         }
-        // Apply date filter
-        if (filters.startDate || filters.endDate) {
+        // Apply date filters
+        if (filters.createdStartDate || filters.createdEndDate) {
           const createdDate = new Date(story.created);
-          if (filters.startDate && createdDate < new Date(filters.startDate)) return false;
-          if (filters.endDate) {
-            const endDate = new Date(filters.endDate);
+          if (filters.createdStartDate && createdDate < new Date(filters.createdStartDate)) return false;
+          if (filters.createdEndDate) {
+            const endDate = new Date(filters.createdEndDate);
             endDate.setHours(23, 59, 59, 999);
             if (createdDate > endDate) return false;
+          }
+        }
+        if (filters.resolvedStartDate || filters.resolvedEndDate) {
+          if (!story.resolved) return false;
+          const resolvedDate = new Date(story.resolved);
+          if (filters.resolvedStartDate && resolvedDate < new Date(filters.resolvedStartDate)) return false;
+          if (filters.resolvedEndDate) {
+            const endDate = new Date(filters.resolvedEndDate);
+            endDate.setHours(23, 59, 59, 999);
+            if (resolvedDate > endDate) return false;
           }
         }
         return story.sprint === sprint;
@@ -148,14 +204,24 @@ const JiraStoryReport = () => {
         // Apply other active filters but not story points filter
         if (filters.issueTypes.length > 0 && !filters.issueTypes.includes(story.issue_type)) return false;
         if (filters.sprints.length > 0 && !filters.sprints.includes(story.sprint)) return false;
-        // Apply date filter
-        if (filters.startDate || filters.endDate) {
+        // Apply date filters
+        if (filters.createdStartDate || filters.createdEndDate) {
           const createdDate = new Date(story.created);
-          if (filters.startDate && createdDate < new Date(filters.startDate)) return false;
-          if (filters.endDate) {
-            const endDate = new Date(filters.endDate);
+          if (filters.createdStartDate && createdDate < new Date(filters.createdStartDate)) return false;
+          if (filters.createdEndDate) {
+            const endDate = new Date(filters.createdEndDate);
             endDate.setHours(23, 59, 59, 999);
             if (createdDate > endDate) return false;
+          }
+        }
+        if (filters.resolvedStartDate || filters.resolvedEndDate) {
+          if (!story.resolved) return false;
+          const resolvedDate = new Date(story.resolved);
+          if (filters.resolvedStartDate && resolvedDate < new Date(filters.resolvedStartDate)) return false;
+          if (filters.resolvedEndDate) {
+            const endDate = new Date(filters.resolvedEndDate);
+            endDate.setHours(23, 59, 59, 999);
+            if (resolvedDate > endDate) return false;
           }
         }
         const storyPointValue = (story.story_points && story.story_points > 0) ? story.story_points : 'none';
@@ -194,17 +260,31 @@ const JiraStoryReport = () => {
     }));
   };
 
-  const setStartDate = (date: string) => {
+  const setCreatedStartDate = (date: string) => {
     setFilters(prev => ({
       ...prev,
-      startDate: date
+      createdStartDate: date
     }));
   };
 
-  const setEndDate = (date: string) => {
+  const setCreatedEndDate = (date: string) => {
     setFilters(prev => ({
       ...prev,
-      endDate: date
+      createdEndDate: date
+    }));
+  };
+
+  const setResolvedStartDate = (date: string) => {
+    setFilters(prev => ({
+      ...prev,
+      resolvedStartDate: date
+    }));
+  };
+
+  const setResolvedEndDate = (date: string) => {
+    setFilters(prev => ({
+      ...prev,
+      resolvedEndDate: date
     }));
   };
 
@@ -213,12 +293,22 @@ const JiraStoryReport = () => {
       issueTypes: [],
       sprints: [],
       storyPoints: [],
-      startDate: '',
-      endDate: ''
+      createdStartDate: '',
+      createdEndDate: '',
+      resolvedStartDate: '',
+      resolvedEndDate: ''
     });
   };
 
-  const hasActiveFilters = filters.issueTypes.length > 0 || filters.sprints.length > 0 || filters.storyPoints.length > 0 || filters.startDate || filters.endDate;
+  const hasActiveFilters = filters.issueTypes.length > 0 || filters.sprints.length > 0 || filters.storyPoints.length > 0 || filters.createdStartDate || filters.createdEndDate || filters.resolvedStartDate || filters.resolvedEndDate;
+
+  // Accordion toggle function
+  const toggleAccordion = (section: keyof typeof accordionStates) => {
+    setAccordionStates(prev => ({
+      ...prev,
+      [section]: !prev[section]
+    }));
+  };
 
   const calculateCycleTimes = (story: JiraIssue): StoryMetrics => {
     const defaultMetrics: StoryMetrics = {
@@ -1066,120 +1156,227 @@ const JiraStoryReport = () => {
     return 0;
   });
 
+  // Accordion Header Component
+  const AccordionHeader = ({ 
+    title, 
+    icon, 
+    isOpen, 
+    onClick, 
+    activeCount = 0 
+  }: { 
+    title: string; 
+    icon?: React.ReactNode; 
+    isOpen: boolean; 
+    onClick: () => void;
+    activeCount?: number;
+  }) => (
+    <button
+      onClick={onClick}
+      className="w-full flex items-center justify-between py-3 px-0 text-left hover:bg-gray-100 rounded-md transition-colors"
+    >
+      <div className="flex items-center space-x-2">
+        {icon}
+        <span className="font-medium text-gray-700 text-sm">{title}</span>
+        {activeCount > 0 && (
+          <span className="bg-blue-100 text-blue-700 text-xs px-2 py-1 rounded-full font-medium">
+            {activeCount}
+          </span>
+        )}
+      </div>
+      {isOpen ? (
+        <ChevronDown className="h-4 w-4 text-gray-500" />
+      ) : (
+        <ChevronRight className="h-4 w-4 text-gray-500" />
+      )}
+    </button>
+  );
+
   // Sidebar Filter Component
   const FilterSidebar = () => {
     const { issueTypeCounts, sprintCounts, storyPointCounts } = getFilterCounts();
 
     return (
-      <div className="w-64 bg-gray-50 border-r border-gray-200 p-4 space-y-6 overflow-y-auto h-screen sticky top-0" style={{ minWidth: '256px' }}>
-        <div className="flex items-center justify-between">
+      <div className="w-64 bg-gray-50 border-r border-gray-200 p-4 space-y-4 overflow-y-auto h-screen sticky top-0" style={{ minWidth: '256px' }}>
+        <div className="flex items-center justify-between mb-4">
           <h3 className="font-semibold text-gray-900">Filters</h3>
           {hasActiveFilters && (
             <button
               onClick={clearAllFilters}
-              className="text-xs text-blue-600 hover:text-blue-800 underline"
+              className="text-xs text-blue-600 hover:text-blue-800 underline font-medium"
             >
               Clear All
             </button>
           )}
         </div>
 
-        {/* Date Range Filter */}
+        {/* Created Date Range Filter */}
         <div>
-          <h4 className="font-medium text-gray-700 text-sm mb-3 flex items-center">
-            <CalendarDays className="h-4 w-4 mr-1" />
-            Date Range
-          </h4>
-          <div className="space-y-3">
-            <div>
-              <label className="block text-xs text-gray-600 mb-1">Start Date</label>
-              <input
-                type="date"
-                value={filters.startDate}
-                onChange={(e) => setStartDate(e.target.value)}
-                className="w-full text-sm border border-gray-300 rounded px-2 py-1 focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
-              />
+          <AccordionHeader
+            title="Created Date"
+            isOpen={accordionStates.createdDate}
+            onClick={() => toggleAccordion('createdDate')}
+            activeCount={filters.createdStartDate || filters.createdEndDate ? 1 : 0}
+          />
+          {accordionStates.createdDate && (
+            <div className="mt-3 space-y-3">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">From</label>
+                <input
+                  type="date"
+                  value={filters.createdStartDate}
+                  onChange={(e) => setCreatedStartDate(e.target.value)}
+                  className="w-full text-sm font-medium text-gray-900 border border-gray-300 rounded-md px-3 py-2 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-white"
+                  style={{ colorScheme: 'light' }}
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">To</label>
+                <input
+                  type="date"
+                  value={filters.createdEndDate}
+                  onChange={(e) => setCreatedEndDate(e.target.value)}
+                  className="w-full text-sm font-medium text-gray-900 border border-gray-300 rounded-md px-3 py-2 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-white"
+                  style={{ colorScheme: 'light' }}
+                />
+              </div>
+              {(filters.createdStartDate || filters.createdEndDate) && (
+                <button
+                  onClick={() => {
+                    setCreatedStartDate('');
+                    setCreatedEndDate('');
+                  }}
+                  className="text-sm text-gray-500 hover:text-gray-700 underline font-medium"
+                >
+                  Clear created dates
+                </button>
+              )}
             </div>
-            <div>
-              <label className="block text-xs text-gray-600 mb-1">End Date</label>
-              <input
-                type="date"
-                value={filters.endDate}
-                onChange={(e) => setEndDate(e.target.value)}
-                className="w-full text-sm border border-gray-300 rounded px-2 py-1 focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
-              />
+          )}
+        </div>
+
+        {/* Resolved Date Range Filter */}
+        <div>
+          <AccordionHeader
+            title="Resolved Date"
+            isOpen={accordionStates.resolvedDate}
+            onClick={() => toggleAccordion('resolvedDate')}
+            activeCount={filters.resolvedStartDate || filters.resolvedEndDate ? 1 : 0}
+          />
+          {accordionStates.resolvedDate && (
+            <div className="mt-3 space-y-3">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">From</label>
+                <input
+                  type="date"
+                  value={filters.resolvedStartDate}
+                  onChange={(e) => setResolvedStartDate(e.target.value)}
+                  className="w-full text-sm font-medium text-gray-900 border border-gray-300 rounded-md px-3 py-2 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-white"
+                  style={{ colorScheme: 'light' }}
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">To</label>
+                <input
+                  type="date"
+                  value={filters.resolvedEndDate}
+                  onChange={(e) => setResolvedEndDate(e.target.value)}
+                  className="w-full text-sm font-medium text-gray-900 border border-gray-300 rounded-md px-3 py-2 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-white"
+                  style={{ colorScheme: 'light' }}
+                />
+              </div>
+              {(filters.resolvedStartDate || filters.resolvedEndDate) && (
+                <button
+                  onClick={() => {
+                    setResolvedStartDate('');
+                    setResolvedEndDate('');
+                  }}
+                  className="text-sm text-gray-500 hover:text-gray-700 underline font-medium"
+                >
+                  Clear resolved dates
+                </button>
+              )}
             </div>
-            {(filters.startDate || filters.endDate) && (
-              <button
-                onClick={() => {
-                  setStartDate('');
-                  setEndDate('');
-                }}
-                className="text-xs text-gray-500 hover:text-gray-700 underline"
-              >
-                Clear dates
-              </button>
-            )}
-          </div>
+          )}
         </div>
 
         {/* Issue Type Filter */}
         <div>
-          <h4 className="font-medium text-gray-700 text-sm mb-3">Issue Type</h4>
-          <div className="space-y-2 max-h-40 overflow-y-auto">
-            {issueTypeCounts.map(({ value, count }) => (
-              <label key={value} className="flex items-center space-x-2 cursor-pointer hover:bg-gray-100 p-1 rounded">
-                <input
-                  type="checkbox"
-                  checked={filters.issueTypes.includes(value)}
-                  onChange={() => toggleIssueType(value)}
-                  className="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-                />
-                <span className="text-sm text-gray-700 flex-1">{value}</span>
-                <span className="text-xs text-gray-500">({count})</span>
-              </label>
-            ))}
-          </div>
+          <AccordionHeader
+            title="Issue Type"
+            isOpen={accordionStates.issueType}
+            onClick={() => toggleAccordion('issueType')}
+            activeCount={filters.issueTypes.length}
+          />
+          {accordionStates.issueType && (
+            <div className="mt-3 space-y-2 max-h-40 overflow-y-auto">
+              {issueTypeCounts.map(({ value, count }) => (
+                <label key={value} className="flex items-center space-x-2 cursor-pointer hover:bg-gray-100 p-1 rounded">
+                  <input
+                    type="checkbox"
+                    checked={filters.issueTypes.includes(value)}
+                    onChange={() => toggleIssueType(value)}
+                    className="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                  />
+                  <span className="text-sm text-gray-700 flex-1">{value}</span>
+                  <span className="text-xs text-gray-500">({count})</span>
+                </label>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* Sprint Filter */}
         <div>
-          <h4 className="font-medium text-gray-700 text-sm mb-3">Sprint</h4>
-          <div className="space-y-2 max-h-40 overflow-y-auto">
-            {sprintCounts.map(({ value, count }) => (
-              <label key={value} className="flex items-center space-x-2 cursor-pointer hover:bg-gray-100 p-1 rounded">
-                <input
-                  type="checkbox"
-                  checked={filters.sprints.includes(value)}
-                  onChange={() => toggleSprint(value)}
-                  className="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-                />
-                <span className="text-sm text-gray-700 flex-1 truncate" title={value}>{value}</span>
-                <span className="text-xs text-gray-500">({count})</span>
-              </label>
-            ))}
-          </div>
+          <AccordionHeader
+            title="Sprint"
+            isOpen={accordionStates.sprint}
+            onClick={() => toggleAccordion('sprint')}
+            activeCount={filters.sprints.length}
+          />
+          {accordionStates.sprint && (
+            <div className="mt-3 space-y-2 max-h-40 overflow-y-auto">
+              {sprintCounts.map(({ value, count }) => (
+                <label key={value} className="flex items-center space-x-2 cursor-pointer hover:bg-gray-100 p-1 rounded">
+                  <input
+                    type="checkbox"
+                    checked={filters.sprints.includes(value)}
+                    onChange={() => toggleSprint(value)}
+                    className="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                  />
+                  <span className="text-sm text-gray-700 flex-1 truncate" title={value}>{value}</span>
+                  <span className="text-xs text-gray-500">({count})</span>
+                </label>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* Story Points Filter */}
         <div>
-          <h4 className="font-medium text-gray-700 text-sm mb-3">Story Points</h4>
-          <div className="space-y-2 max-h-40 overflow-y-auto">
-            {storyPointCounts.map(({ value, count }) => (
-              <label key={value} className="flex items-center space-x-2 cursor-pointer hover:bg-gray-100 p-1 rounded">
-                <input
-                  type="checkbox"
-                  checked={filters.storyPoints.includes(value)}
-                  onChange={() => toggleStoryPoint(value)}
-                  className="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-                />
-                <span className="text-sm text-gray-700 flex-1">
-                  {value === 'none' ? 'No Points' : `${value} points`}
-                </span>
-                <span className="text-xs text-gray-500">({count})</span>
-              </label>
-            ))}
-          </div>
+          <AccordionHeader
+            title="Story Points"
+            isOpen={accordionStates.storyPoints}
+            onClick={() => toggleAccordion('storyPoints')}
+            activeCount={filters.storyPoints.length}
+          />
+          {accordionStates.storyPoints && (
+            <div className="mt-3 space-y-2 max-h-40 overflow-y-auto">
+              {storyPointCounts.map(({ value, count }) => (
+                <label key={value} className="flex items-center space-x-2 cursor-pointer hover:bg-gray-100 p-1 rounded">
+                  <input
+                    type="checkbox"
+                    checked={filters.storyPoints.includes(value)}
+                    onChange={() => toggleStoryPoint(value)}
+                    className="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                  />
+                  <span className="text-sm text-gray-700 flex-1">
+                    {value === 'none' ? 'No Points' : `${value} points`}
+                  </span>
+                  <span className="text-xs text-gray-500">({count})</span>
+                </label>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* Active Filters Summary */}

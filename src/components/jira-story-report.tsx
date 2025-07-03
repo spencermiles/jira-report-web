@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Upload, FileText, Calendar, AlertCircle, HelpCircle, CalendarDays, ChevronDown, ChevronRight } from 'lucide-react';
+import { Upload, FileText, Calendar, AlertCircle, HelpCircle, ChevronDown, ChevronRight } from 'lucide-react';
 import { 
   JiraIssue, 
   ProcessedStory, 
@@ -19,7 +19,7 @@ const JiraStoryReport = () => {
 
   // Filter states
   const [filters, setFilters] = useState({
-    issueTypes: [] as string[],
+    issueTypes: ['Story'] as string[],
     sprints: [] as string[],
     storyPoints: [] as (number | 'none')[],
     createdStartDate: '' as string,
@@ -32,7 +32,7 @@ const JiraStoryReport = () => {
   const [accordionStates, setAccordionStates] = useState({
     createdDate: false,
     resolvedDate: false,
-    issueType: false,
+    issueType: true,
     sprint: false,
     storyPoints: false
   });
@@ -1622,7 +1622,7 @@ const JiraStoryReport = () => {
 
             {/* Row 3: Size Distribution */}
             <div className="mb-4">
-              <h4 className="text-md font-medium text-gray-700 mb-3">Story Size Impact</h4>
+              <h4 className="text-md font-medium text-gray-700 mb-3">Lead Time Analysis by Story Size</h4>
               <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
                                  {Object.entries(calculateSizeDistribution()).map(([size, data]) => (
                    <FlowMetricCard

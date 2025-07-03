@@ -3,6 +3,18 @@
 import React, { useState } from 'react';
 import { Upload, FileText, Calendar, AlertCircle, HelpCircle, ChevronDown, ChevronRight } from 'lucide-react';
 import { 
+  Chart as ChartJS,
+  CategoryScale,
+  LinearScale,
+  BarElement,
+  LineElement,
+  PointElement,
+  Title,
+  Tooltip,
+  Legend,
+} from 'chart.js';
+import { Bar, Line } from 'react-chartjs-2';
+import { 
   JiraIssue, 
   ProcessedStory, 
   StoryMetrics, 
@@ -10,12 +22,25 @@ import {
   TooltipType
 } from '@/types/jira';
 
-const JiraStoryReport = () => {
+// Register Chart.js components
+ChartJS.register(
+  CategoryScale,
+  LinearScale,
+  BarElement,
+  LineElement,
+  PointElement,
+  Title,
+  Tooltip,
+  Legend
+);
+
+const JiraIssueReport = () => {
   const [processedStories, setProcessedStories] = useState<ProcessedStory[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [sortConfig, setSortConfig] = useState<{ key: string; direction: 'asc' | 'desc' } | null>(null);
   const [hoveredTooltip, setHoveredTooltip] = useState<TooltipType>(null);
+  const [activeTab, setActiveTab] = useState<'metrics' | 'issues' | 'charts'>('metrics');
 
   // Filter states
   const [filters, setFilters] = useState({
@@ -864,6 +889,262 @@ const JiraStoryReport = () => {
     };
   };
 
+  // Chart data processing
+  const getCreatedResolvedData = () => {
+    const dailyData: Record<string, { created: number; resolved: number }> = {};
+    
+    // Initialize with all dates in the range
+    const allDates = new Set<string>();
+    
+    filteredStories.forEach(story => {
+      if (story.created) {
+        const createdDate = new Date(story.created).toISOString().split('T')[0];
+        allDates.add(createdDate);
+        
+        if (!dailyData[createdDate]) {
+          dailyData[createdDate] = { created: 0, resolved: 0 };
+        }
+        dailyData[createdDate].created++;
+      }
+      
+      if (story.resolved) {
+        const resolvedDate = new Date(story.resolved).toISOString().split('T')[0];
+        allDates.add(resolvedDate);
+        
+        if (!dailyData[resolvedDate]) {
+          dailyData[resolvedDate] = { created: 0, resolved: 0 };
+        }
+        dailyData[resolvedDate].resolved++;
+      }
+    });
+    
+    // Fill in missing dates with zero values
+    allDates.forEach(date => {
+      if (!dailyData[date]) {
+        dailyData[date] = { created: 0, resolved: 0 };
+      }
+    });
+    
+    // Convert to array and sort by date
+    return Object.entries(dailyData)
+      .map(([date, data]) => ({
+        date,
+        created: data.created,
+        resolved: data.resolved
+      }))
+      .sort((a, b) => a.date.localeCompare(b.date));
+  };
+
+  const SimpleHistogram = ({ 
+    data, 
+    title, 
+    height = 300
+  }: { 
+    data: Array<{ date: string; created: number; resolved: number }>; 
+    title: string;
+    height?: number;
+  }) => {
+    if (data.length === 0) {
+      return (
+        <div className="flex items-center justify-center h-64 text-gray-500">
+          No data available
+        </div>
+      );
+    }
+
+    // Format date for display
+    const formatDateLabel = (dateStr: string) => {
+      try {
+        return new Date(dateStr).toLocaleDateString('en-US', { 
+          month: 'short', 
+          day: 'numeric' 
+        });
+      } catch {
+        return dateStr;
+      }
+    };
+
+    const chartData = {
+      labels: data.map(d => formatDateLabel(d.date)),
+      datasets: [
+        {
+          label: 'Issues Created',
+          data: data.map(d => d.created),
+          backgroundColor: '#3b82f6',
+          borderColor: '#3b82f6',
+          borderWidth: 1,
+        },
+        {
+          label: 'Issues Resolved',
+          data: data.map(d => d.resolved),
+          backgroundColor: '#10b981',
+          borderColor: '#10b981',
+          borderWidth: 1,
+        },
+      ],
+    };
+
+    const options = {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        title: {
+          display: false,
+        },
+        legend: {
+          position: 'bottom' as const,
+          labels: {
+            usePointStyle: true,
+            padding: 20,
+          },
+        },
+      },
+      scales: {
+        x: {
+          grid: {
+            display: false,
+          },
+          ticks: {
+            maxTicksLimit: 12,
+          },
+        },
+        y: {
+          beginAtZero: true,
+          grid: {
+            color: '#f3f4f6',
+          },
+        },
+      },
+      interaction: {
+        intersect: false,
+        mode: 'index' as const,
+      },
+    };
+    
+    return (
+      <div className="bg-white border border-gray-200 rounded-lg p-6">
+        <h3 className="text-lg font-semibold text-gray-900 mb-4">{title}</h3>
+        <div style={{ height: `${height}px` }}>
+          <Bar data={chartData} options={options} />
+        </div>
+      </div>
+    );
+  };
+
+  const CumulativeLineChart = ({ 
+    data, 
+    title, 
+    height = 300
+  }: { 
+    data: Array<{ date: string; created: number; resolved: number }>; 
+    title: string;
+    height?: number;
+  }) => {
+    if (data.length === 0) {
+      return (
+        <div className="flex items-center justify-center h-64 text-gray-500">
+          No data available
+        </div>
+      );
+    }
+
+    // Calculate cumulative data
+    const cumulativeData = data.reduce((acc, curr, index) => {
+      const prevCreated = index > 0 ? acc[index - 1].cumulativeCreated : 0;
+      const prevResolved = index > 0 ? acc[index - 1].cumulativeResolved : 0;
+      
+      acc.push({
+        date: curr.date,
+        cumulativeCreated: prevCreated + curr.created,
+        cumulativeResolved: prevResolved + curr.resolved
+      });
+      
+      return acc;
+    }, [] as Array<{ date: string; cumulativeCreated: number; cumulativeResolved: number }>);
+
+    // Format date for display
+    const formatDateLabel = (dateStr: string) => {
+      try {
+        return new Date(dateStr).toLocaleDateString('en-US', { 
+          month: 'short', 
+          day: 'numeric' 
+        });
+      } catch {
+        return dateStr;
+      }
+    };
+
+    const chartData = {
+      labels: cumulativeData.map(d => formatDateLabel(d.date)),
+      datasets: [
+        {
+          label: 'Cumulative Issues Created',
+          data: cumulativeData.map(d => d.cumulativeCreated),
+          borderColor: '#3b82f6',
+          backgroundColor: 'rgba(59, 130, 246, 0.1)',
+          borderWidth: 2,
+          fill: false,
+          tension: 0.1,
+        },
+        {
+          label: 'Cumulative Issues Resolved',
+          data: cumulativeData.map(d => d.cumulativeResolved),
+          borderColor: '#10b981',
+          backgroundColor: 'rgba(16, 185, 129, 0.1)',
+          borderWidth: 2,
+          fill: false,
+          tension: 0.1,
+        },
+      ],
+    };
+
+    const options = {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        title: {
+          display: false,
+        },
+        legend: {
+          position: 'bottom' as const,
+          labels: {
+            usePointStyle: true,
+            padding: 20,
+          },
+        },
+      },
+      scales: {
+        x: {
+          grid: {
+            display: false,
+          },
+          ticks: {
+            maxTicksLimit: 12,
+          },
+        },
+        y: {
+          beginAtZero: true,
+          grid: {
+            color: '#f3f4f6',
+          },
+        },
+      },
+      interaction: {
+        intersect: false,
+        mode: 'index' as const,
+      },
+    };
+    
+    return (
+      <div className="bg-white border border-gray-200 rounded-lg p-6">
+        <h3 className="text-lg font-semibold text-gray-900 mb-4">{title}</h3>
+        <div style={{ height: `${height}px` }}>
+          <Line data={chartData} options={options} />
+        </div>
+      </div>
+    );
+  };
+
   const formatTimestamp = (timestamp: Date | null): string => {
     if (!timestamp) return '-';
     try {
@@ -1402,8 +1683,8 @@ const JiraStoryReport = () => {
       <div className="flex-1 p-6 bg-white">
         <div className="max-w-7xl mx-auto">
       <div className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-900 mb-2">JIRA Story Report</h1>
-        <p className="text-gray-600">Upload your JIRA JSON export to view all Story issues with cycle time analysis</p>
+        <h1 className="text-3xl font-bold text-gray-900 mb-2">JIRA Issue Report</h1>
+        <p className="text-gray-600">Upload your JIRA JSON export to view all issues with cycle time analysis</p>
       </div>
 
       {/* File Upload */}
@@ -1448,23 +1729,48 @@ const JiraStoryReport = () => {
       {/* Results */}
       {processedStories.length > 0 && (
         <div>
-          <div className="mb-6 flex items-center justify-between">
-            <h2 className="text-xl font-semibold text-gray-900">
-              Issues: {filteredStories.length} {hasActiveFilters && `of ${processedStories.length}`}
-            </h2>
-            {hasActiveFilters && (
+          {/* Tab Navigation */}
+          <div className="border-b border-gray-200 mb-6">
+            <nav className="flex space-x-8">
               <button
-                onClick={clearAllFilters}
-                className="text-sm text-blue-600 hover:text-blue-800 underline"
+                onClick={() => setActiveTab('metrics')}
+                className={`py-2 px-1 border-b-2 font-medium text-sm ${
+                  activeTab === 'metrics'
+                    ? 'border-blue-500 text-blue-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                }`}
               >
-                Clear All Filters
+                Metrics
               </button>
-            )}
+              <button
+                onClick={() => setActiveTab('issues')}
+                className={`py-2 px-1 border-b-2 font-medium text-sm ${
+                  activeTab === 'issues'
+                    ? 'border-blue-500 text-blue-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                }`}
+              >
+                Issues ({filteredStories.length})
+              </button>
+              <button
+                onClick={() => setActiveTab('charts')}
+                className={`py-2 px-1 border-b-2 font-medium text-sm ${
+                  activeTab === 'charts'
+                    ? 'border-blue-500 text-blue-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                }`}
+              >
+                Charts
+              </button>
+            </nav>
           </div>
 
-          {/* Top Level Metrics */}
-          <div className="mb-8">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">Summary Metrics</h3>
+          {/* Metrics Tab Content */}
+          {activeTab === 'metrics' && (
+            <div>
+              {/* Top Level Metrics */}
+              <div className="mb-8">
+                <h3 className="text-lg font-semibold text-gray-900 mb-4">Summary Metrics</h3>
             <div className="grid grid-cols-4 gap-4 mb-4">
               <StatCard 
                 title="Lead Time" 
@@ -1528,9 +1834,9 @@ const JiraStoryReport = () => {
                  description="Percentage of lead time spent actively working vs waiting. Higher is better (25%+ is excellent)."
                  color={calculateFlowEfficiency().efficiency >= 25 ? 'text-green-600' : 
                         calculateFlowEfficiency().efficiency >= 15 ? 'text-yellow-600' : 'text-red-600'}
-                 details={[
-                   { label: 'Stories Analyzed', value: calculateFlowEfficiency().count }
-                 ]}
+                                    details={[
+                     { label: 'Issues Analyzed', value: calculateFlowEfficiency().count }
+                   ]}
                  helpContent={{
                    title: "Flow Efficiency",
                    description: "The percentage of total lead time where work is actively being performed vs time spent waiting in queues or blocked.",
@@ -1548,7 +1854,7 @@ const JiraStoryReport = () => {
                    color={stage.cv <= 0.5 ? 'text-green-600' : 
                           stage.cv <= 1.0 ? 'text-yellow-600' : 'text-red-600'}
                    details={[
-                     { label: 'Stories', value: stage.count }
+                     { label: 'Issues', value: stage.count }
                    ]}
                    helpContent={{
                      title: `${stage.stage} Stage Variability`,
@@ -1566,17 +1872,17 @@ const JiraStoryReport = () => {
                  title="First-Time-Through"
                  value={calculateFirstTimeThrough().rate}
                  unit="%"
-                 description="Stories completed without significant rework. Higher is better (80%+ is excellent)."
+                 description="Issues completed without significant rework. Higher is better (80%+ is excellent)."
                  color={calculateFirstTimeThrough().rate >= 80 ? 'text-green-600' : 
                         calculateFirstTimeThrough().rate >= 60 ? 'text-yellow-600' : 'text-red-600'}
                  details={[
                    { label: 'First-Time', value: calculateFirstTimeThrough().firstTimeCount },
-                   { label: 'Total Stories', value: calculateFirstTimeThrough().totalStories }
+                   { label: 'Total Issues', value: calculateFirstTimeThrough().totalStories }
                  ]}
                  helpContent={{
                    title: "First-Time-Through Rate",
-                   description: "The percentage of stories that flow through the development process with ZERO rework. No bounces from review or QA.",
-                   calculation: "Stories with 0 review churn AND 0 QA churn / Total stories × 100. Any bounce back from review or QA disqualifies the story.",
+                   description: "The percentage of issues that flow through the development process with ZERO rework. No bounces from review or QA.",
+                   calculation: "Issues with 0 review churn AND 0 QA churn / Total issues × 100. Any bounce back from review or QA disqualifies the issue.",
                    interpretation: "50%+ is excellent quality, 30-50% is good, 15-30% needs attention, <15% indicates serious quality issues. This strict metric reveals true 'right first time' delivery capability."
                  }}
                />
@@ -1584,7 +1890,7 @@ const JiraStoryReport = () => {
                              <FlowMetricCard
                  title="Process Adherence"
                  value="See Details"
-                 description="Percentage of stories that follow the standard workflow without skipping stages."
+                 description="Percentage of issues that follow the standard workflow without skipping stages."
                  details={(() => {
                    const skips = calculateStageSkips();
                    return [
@@ -1595,7 +1901,7 @@ const JiraStoryReport = () => {
                  helpContent={{
                    title: "Process Adherence",
                    description: "Measures how consistently teams follow the defined workflow stages. High skip rates indicate process shortcuts that may impact quality.",
-                   calculation: "% Skipped Grooming = Stories going direct to 'In Progress' without 'Ready for Grooming' / Total Stories. % Skipped Review = Stories going direct to QA without Review.",
+                                        calculation: "% Skipped Grooming = Issues going direct to 'In Progress' without 'Ready for Grooming' / Total Issues. % Skipped Review = Issues going direct to QA without Review.",
                    interpretation: "Lower skip rates are better. <10% skipping is excellent, 10-20% is acceptable, >20% suggests process problems or inadequate tooling. Some skipping may be intentional for small fixes."
                  }}
                />
@@ -1608,7 +1914,7 @@ const JiraStoryReport = () => {
                  color={calculateBlockedTimeAnalysis().blockedTimeRatio <= 5 ? 'text-green-600' : 
                         calculateBlockedTimeAnalysis().blockedTimeRatio <= 15 ? 'text-yellow-600' : 'text-red-600'}
                  details={[
-                   { label: 'Stories Blocked', value: calculateBlockedTimeAnalysis().storiesBlocked },
+                   { label: 'Issues Blocked', value: calculateBlockedTimeAnalysis().storiesBlocked },
                    { label: 'Avg Blocked Days', value: calculateBlockedTimeAnalysis().avgBlockedTime }
                  ]}
                  helpContent={{
@@ -1622,7 +1928,7 @@ const JiraStoryReport = () => {
 
             {/* Row 3: Size Distribution */}
             <div className="mb-4">
-              <h4 className="text-md font-medium text-gray-700 mb-3">Lead Time Analysis by Story Size</h4>
+              <h4 className="text-md font-medium text-gray-700 mb-3">Lead Time Analysis by Issue Size</h4>
               <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
                                  {Object.entries(calculateSizeDistribution()).map(([size, data]) => (
                    <FlowMetricCard
@@ -1632,25 +1938,44 @@ const JiraStoryReport = () => {
                      unit=" days"
                      description="lead time"
                      details={[
-                       { label: 'Story Count', value: `${data.count} stories` },
+                       { label: 'Issue Count', value: `${data.count} issues` },
                        { label: 'Median Grooming', value: `${data.medianGroomingTime} days` },
                        { label: 'Median Dev Time', value: `${data.medianDevTime} days` },
                        { label: 'Median QA Time', value: `${data.medianQATime} days` },
                        { label: 'Completion Rate', value: `${data.completionRate}%` }
                      ]}
                      helpContent={{
-                       title: `${size} Story Analysis`,
-                       description: `Analysis of delivery performance for ${size.toLowerCase()} stories. Shows how story size impacts timing across all development stages and completion rates.`,
-                       calculation: "Groups stories by point estimates: Small (1pt), Medium (2-3pts), Large (4+pts), Unestimated (0pts). Calculates median times for lead time, grooming, development, QA, and completion percentage for each group.",
-                       interpretation: "1pt stories should show fastest medians across all stages with highest completion rates. 2-3pt stories represent typical complexity. 4+pt stories often need breaking down and show longer medians with more variability."
+                                                title: `${size} Issue Analysis`,
+                       description: `Analysis of delivery performance for ${size.toLowerCase()} issues. Shows how issue size impacts timing across all development stages and completion rates.`,
+                       calculation: "Groups issues by point estimates: Small (1pt), Medium (2-3pts), Large (4+pts), Unestimated (0pts). Calculates median times for lead time, grooming, development, QA, and completion percentage for each group.",
+                       interpretation: "1pt issues should show fastest medians across all stages with highest completion rates. 2-3pt issues represent typical complexity. 4+pt issues often need breaking down and show longer medians with more variability."
                      }}
                    />
                  ))}
               </div>
             </div>
           </div>
+            </div>
+          )}
 
-          <div className="bg-white shadow-sm border border-gray-200 rounded-lg overflow-hidden">
+          {/* Issues Tab Content */}
+          {activeTab === 'issues' && (
+            <div>
+              <div className="mb-6 flex items-center justify-between">
+                <h2 className="text-xl font-semibold text-gray-900">
+                  Issues: {filteredStories.length} {hasActiveFilters && `of ${processedStories.length}`}
+                </h2>
+                {hasActiveFilters && (
+                  <button
+                    onClick={clearAllFilters}
+                    className="text-sm text-blue-600 hover:text-blue-800 underline"
+                  >
+                    Clear All Filters
+                  </button>
+                )}
+              </div>
+
+              <div className="bg-white shadow-sm border border-gray-200 rounded-lg overflow-hidden">
             <div className="overflow-x-auto">
               <table className="min-w-full divide-y divide-gray-200">
                 <thead className="bg-gray-50">
@@ -1942,13 +2267,70 @@ const JiraStoryReport = () => {
               </table>
             </div>
           </div>
+            </div>
+          )}
+
+          {/* Charts Tab Content */}
+          {activeTab === 'charts' && (
+            <div>
+              <div className="mb-6">
+                <h2 className="text-xl font-semibold text-gray-900 mb-2">Charts & Trends</h2>
+                <p className="text-gray-600">Visual analysis of issue creation and resolution patterns over time</p>
+              </div>
+
+              {/* Daily Activity Histogram */}
+              <div className="mb-8">
+                <SimpleHistogram
+                  data={getCreatedResolvedData()}
+                  title="Daily Issues Created vs Resolved"
+                  height={400}
+                />
+              </div>
+
+              {/* Cumulative Trend Chart */}
+              <div className="mb-8">
+                <CumulativeLineChart
+                  data={getCreatedResolvedData()}
+                  title="Cumulative Issues Created vs Resolved Over Time"
+                  height={400}
+                />
+              </div>
+
+              {/* Summary Statistics */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div className="bg-white border border-gray-200 rounded-lg p-6">
+                  <h3 className="text-lg font-semibold text-gray-900 mb-2">Creation Trend</h3>
+                  <div className="text-3xl font-bold text-blue-600 mb-1">
+                    {filteredStories.filter(s => s.created).length}
+                  </div>
+                  <div className="text-sm text-gray-600">Total Issues Created</div>
+                </div>
+
+                <div className="bg-white border border-gray-200 rounded-lg p-6">
+                  <h3 className="text-lg font-semibold text-gray-900 mb-2">Resolution Trend</h3>
+                  <div className="text-3xl font-bold text-green-600 mb-1">
+                    {filteredStories.filter(s => s.resolved).length}
+                  </div>
+                  <div className="text-sm text-gray-600">Total Issues Resolved</div>
+                </div>
+
+                <div className="bg-white border border-gray-200 rounded-lg p-6">
+                  <h3 className="text-lg font-semibold text-gray-900 mb-2">Work in Progress</h3>
+                  <div className="text-3xl font-bold text-yellow-600 mb-1">
+                    {filteredStories.filter(s => !s.resolved).length}
+                  </div>
+                  <div className="text-sm text-gray-600">Issues Still Open</div>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
       {processedStories.length === 0 && !loading && !error && (
         <div className="text-center py-8 text-gray-500">
           <FileText className="mx-auto h-12 w-12 text-gray-300 mb-4" />
-          <p>No stories found in the uploaded file.</p>
+          <p>No issues found in the uploaded file.</p>
         </div>
       )}
         </div>
@@ -1957,4 +2339,4 @@ const JiraStoryReport = () => {
   );
 };
 
-export default JiraStoryReport; 
+export default JiraIssueReport; 

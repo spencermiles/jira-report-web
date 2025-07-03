@@ -1308,7 +1308,7 @@ const JiraStoryReport = () => {
             activeCount={filters.issueTypes.length}
           />
           {accordionStates.issueType && (
-            <div className="mt-3 space-y-2 max-h-40 overflow-y-auto">
+            <div className="mt-3 space-y-2">
               {issueTypeCounts.map(({ value, count }) => (
                 <label key={value} className="flex items-center space-x-2 cursor-pointer hover:bg-gray-100 p-1 rounded">
                   <input
@@ -1334,7 +1334,7 @@ const JiraStoryReport = () => {
             activeCount={filters.sprints.length}
           />
           {accordionStates.sprint && (
-            <div className="mt-3 space-y-2 max-h-40 overflow-y-auto">
+            <div className="mt-3 space-y-2">
               {sprintCounts.map(({ value, count }) => (
                 <label key={value} className="flex items-center space-x-2 cursor-pointer hover:bg-gray-100 p-1 rounded">
                   <input
@@ -1360,7 +1360,7 @@ const JiraStoryReport = () => {
             activeCount={filters.storyPoints.length}
           />
           {accordionStates.storyPoints && (
-            <div className="mt-3 space-y-2 max-h-40 overflow-y-auto">
+            <div className="mt-3 space-y-2">
               {storyPointCounts.map(({ value, count }) => (
                 <label key={value} className="flex items-center space-x-2 cursor-pointer hover:bg-gray-100 p-1 rounded">
                   <input
@@ -1628,11 +1628,11 @@ const JiraStoryReport = () => {
                    <FlowMetricCard
                      key={size}
                      title={size}
-                     value={data.count}
-                     unit=" stories"
-                     description={`Median timing breakdown and completion rate for ${size.toLowerCase()} stories.`}
+                     value={data.medianLeadTime}
+                     unit=" days"
+                     description="lead time"
                      details={[
-                       { label: 'Median Lead Time', value: `${data.medianLeadTime} days` },
+                       { label: 'Story Count', value: `${data.count} stories` },
                        { label: 'Median Grooming', value: `${data.medianGroomingTime} days` },
                        { label: 'Median Dev Time', value: `${data.medianDevTime} days` },
                        { label: 'Median QA Time', value: `${data.medianQATime} days` },

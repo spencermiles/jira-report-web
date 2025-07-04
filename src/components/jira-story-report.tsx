@@ -12,6 +12,7 @@ import {
   Title,
   Tooltip,
   Legend,
+  TooltipItem,
 } from 'chart.js';
 import { Bar, Line } from 'react-chartjs-2';
 import { 
@@ -1542,7 +1543,7 @@ const JiraIssueReport = () => {
         },
         tooltip: {
           callbacks: {
-            afterBody: (context: any) => {
+            afterBody: (context: TooltipItem<'line'>[]) => {
               const dataIndex = context[0]?.dataIndex;
               if (dataIndex !== undefined && weeklyData[dataIndex]) {
                 const week = weeklyData[dataIndex];
@@ -1695,7 +1696,7 @@ const JiraIssueReport = () => {
         },
         tooltip: {
           callbacks: {
-            afterBody: (context: any) => {
+            afterBody: (context: TooltipItem<'line'>[]) => {
               const dataIndex = context[0]?.dataIndex;
               if (dataIndex !== undefined && weeklyData[dataIndex]) {
                 const week = weeklyData[dataIndex];
@@ -1848,7 +1849,7 @@ const JiraIssueReport = () => {
         },
         tooltip: {
           callbacks: {
-            afterBody: (context: any) => {
+            afterBody: (context: TooltipItem<'line'>[]) => {
               const dataIndex = context[0]?.dataIndex;
               if (dataIndex !== undefined && weeklyData[dataIndex]) {
                 const week = weeklyData[dataIndex];
@@ -2001,7 +2002,7 @@ const JiraIssueReport = () => {
         },
         tooltip: {
           callbacks: {
-            afterBody: (context: any) => {
+            afterBody: (context: TooltipItem<'line'>[]) => {
               const dataIndex = context[0]?.dataIndex;
               if (dataIndex !== undefined && weeklyData[dataIndex]) {
                 const week = weeklyData[dataIndex];

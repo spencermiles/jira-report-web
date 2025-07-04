@@ -629,9 +629,10 @@ const JiraIssueReport = () => {
   };
 
   const calculateStoryPointsCorrelation = () => {
-    // Get stories that have both story points and dev cycle time
+    // Get stories that have both story points and dev cycle time (only resolved stories)
     const validPairs = filteredStories
       .filter(story => 
+        story.resolved && // Only resolved stories
         story.story_points && 
         story.story_points > 0 && 
         story.metrics.devCycleTime !== null && 
@@ -658,9 +659,10 @@ const JiraIssueReport = () => {
   };
 
   const calculateQAChurnCorrelation = () => {
-    // Get stories that have both QA churn and QA cycle time
+    // Get stories that have both QA churn and QA cycle time (only resolved stories)
     const validPairs = filteredStories
       .filter(story => 
+        story.resolved && // Only resolved stories
         story.metrics.qaChurn >= 0 && 
         story.metrics.qaCycleTime !== null && 
         story.metrics.qaCycleTime > 0
@@ -688,6 +690,7 @@ const JiraIssueReport = () => {
   // Flow Efficiency: Active Time / Total Lead Time
   const calculateFlowEfficiency = () => {
     const validStories = filteredStories.filter(story => 
+      story.resolved && // Only resolved stories
       story.metrics.leadTime && story.metrics.leadTime > 0
     );
 
@@ -718,6 +721,7 @@ const JiraIssueReport = () => {
     
     return stages.map((stage, index) => {
       const values = filteredStories
+        .filter(story => story.resolved) // Only resolved stories
         .map(story => story.metrics[stage])
         .filter((v): v is number => v !== null && v > 0);
       
@@ -741,9 +745,10 @@ const JiraIssueReport = () => {
   // First-Time-Through Rate
   const calculateFirstTimeThrough = () => {
     let firstTimeCount = 0;
-    const totalStories = filteredStories.length;
+    const resolvedStories = filteredStories.filter(story => story.resolved);
+    const totalStories = resolvedStories.length;
 
-    for (const story of filteredStories) {
+    for (const story of resolvedStories) {
       // True first-time-through means NO rework - zero bounces from review or QA
       const hasNoRework = story.metrics.reviewChurn === 0 && story.metrics.qaChurn === 0;
       if (hasNoRework) {
@@ -787,13 +792,11 @@ const JiraIssueReport = () => {
       'Unestimated': { leadTimes: [], groomingTimes: [], devTimes: [], qaTimes: [], completed: 0 }
     };
 
+    // For size distribution, we want to see completion rate of all stories, 
+    // but only calculate timing metrics for resolved stories
     filteredStories.forEach(story => {
       const points = story.story_points || 0;
       const isCompleted = !!story.resolved;
-      const leadTime = story.metrics.leadTime;
-      const groomingTime = story.metrics.groomingCycleTime;
-      const devTime = story.metrics.devCycleTime;
-      const qaTime = story.metrics.qaCycleTime;
 
       let group: string;
       if (points === 0) group = 'Unestimated';
@@ -802,11 +805,20 @@ const JiraIssueReport = () => {
       else group = 'Large (4+pts)'; // 4+ points
 
       sizeGroups[group].count++;
-      if (isCompleted) groupData[group].completed++;
-      if (leadTime) groupData[group].leadTimes.push(leadTime);
-      if (groomingTime) groupData[group].groomingTimes.push(groomingTime);
-      if (devTime) groupData[group].devTimes.push(devTime);
-      if (qaTime) groupData[group].qaTimes.push(qaTime);
+      if (isCompleted) {
+        groupData[group].completed++;
+        
+        // Only include timing metrics for resolved stories
+        const leadTime = story.metrics.leadTime;
+        const groomingTime = story.metrics.groomingCycleTime;
+        const devTime = story.metrics.devCycleTime;
+        const qaTime = story.metrics.qaCycleTime;
+
+        if (leadTime) groupData[group].leadTimes.push(leadTime);
+        if (groomingTime) groupData[group].groomingTimes.push(groomingTime);
+        if (devTime) groupData[group].devTimes.push(devTime);
+        if (qaTime) groupData[group].qaTimes.push(qaTime);
+      }
     });
 
     // Helper function to calculate median
@@ -838,9 +850,10 @@ const JiraIssueReport = () => {
   const calculateStageSkips = () => {
     let skippedGrooming = 0;
     let skippedReview = 0;
-    const totalStories = filteredStories.length;
+    const resolvedStories = filteredStories.filter(story => story.resolved);
+    const totalStories = resolvedStories.length;
 
-    filteredStories.forEach(story => {
+    resolvedStories.forEach(story => {
       // If story went directly from Draft/Created to In Progress without Ready for Grooming
       if (!story.metrics.timestamps.readyForGrooming && story.metrics.timestamps.inProgress) {
         skippedGrooming++;
@@ -863,10 +876,11 @@ const JiraIssueReport = () => {
 
   // Blocked Time Analysis
   const calculateBlockedTimeAnalysis = () => {
-    const storiesWithBlocks = filteredStories.filter(story => story.metrics.blockers > 0);
+    const resolvedStories = filteredStories.filter(story => story.resolved);
+    const storiesWithBlocks = resolvedStories.filter(story => story.metrics.blockers > 0);
     
     if (storiesWithBlocks.length === 0) {
-      return { blockedTimeRatio: 0, avgBlockedTime: 0, storiesBlocked: 0, totalStories: filteredStories.length };
+      return { blockedTimeRatio: 0, avgBlockedTime: 0, storiesBlocked: 0, totalStories: resolvedStories.length };
     }
 
     // Estimate blocked time (rough approximation: 2 days per blocker incident)
@@ -885,7 +899,7 @@ const JiraIssueReport = () => {
       blockedTimeRatio: Math.round(blockedTimeRatio * 10) / 10,
       avgBlockedTime: Math.round(avgBlockedTime * 10) / 10,
       storiesBlocked: storiesWithBlocks.length,
-      totalStories: filteredStories.length
+      totalStories: resolvedStories.length
     };
   };
 
@@ -2674,26 +2688,32 @@ const JiraIssueReport = () => {
             <div>
               {/* Top Level Metrics */}
               <div className="mb-8">
-                <h3 className="text-lg font-semibold text-gray-900 mb-4">Summary Metrics</h3>
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-lg font-semibold text-gray-900">Summary Metrics</h3>
+                  <div className="text-sm text-gray-600">
+                    Based on {filteredStories.filter(s => s.resolved).length} resolved issues 
+                    ({filteredStories.filter(s => !s.resolved).length} unresolved excluded)
+                  </div>
+                </div>
             <div className="grid grid-cols-4 gap-4 mb-4">
               <StatCard 
                 title="Lead Time" 
-                stats={calculateStats(filteredStories.map(s => s.metrics.leadTime))} 
+                stats={calculateStats(filteredStories.filter(s => s.resolved).map(s => s.metrics.leadTime))} 
                 unit=" days" 
               />
               <StatCard 
                 title="Grooming Time" 
-                stats={calculateStats(filteredStories.map(s => s.metrics.groomingCycleTime))} 
+                stats={calculateStats(filteredStories.filter(s => s.resolved).map(s => s.metrics.groomingCycleTime))} 
                 unit=" days" 
               />
               <StatCard 
                 title="Dev Time" 
-                stats={calculateStats(filteredStories.map(s => s.metrics.devCycleTime))} 
+                stats={calculateStats(filteredStories.filter(s => s.resolved).map(s => s.metrics.devCycleTime))} 
                 unit=" days" 
               />
               <StatCard 
                 title="QA Time" 
-                stats={calculateStats(filteredStories.map(s => s.metrics.qaCycleTime))} 
+                stats={calculateStats(filteredStories.filter(s => s.resolved).map(s => s.metrics.qaCycleTime))} 
                 unit=" days" 
               />
             </div>

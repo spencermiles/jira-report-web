@@ -48,6 +48,7 @@ const JiraIssueReport = () => {
     issueTypes: ['Story'] as string[],
     sprints: [] as string[],
     storyPoints: [] as (number | 'none')[],
+    statuses: ['resolved'] as string[],
     createdStartDate: '' as string,
     createdEndDate: '' as string,
     resolvedStartDate: '' as string,
@@ -60,7 +61,8 @@ const JiraIssueReport = () => {
     resolvedDate: false,
     issueType: true,
     sprint: false,
-    storyPoints: false
+    storyPoints: false,
+    status: false
   });
 
   // Get unique values for filters
@@ -102,6 +104,15 @@ const JiraIssueReport = () => {
     if (filters.storyPoints.length > 0) {
       const storyPointValue = (story.story_points && story.story_points > 0) ? story.story_points : 'none';
       if (!filters.storyPoints.includes(storyPointValue)) {
+        return false;
+      }
+    }
+
+    // Status filter
+    if (filters.statuses.length > 0) {
+      const isResolved = story.resolved != null;
+      const statusValue = isResolved ? 'resolved' : 'unresolved';
+      if (!filters.statuses.includes(statusValue)) {
         return false;
       }
     }
@@ -167,6 +178,11 @@ const JiraIssueReport = () => {
           const storyPointValue = (story.story_points && story.story_points > 0) ? story.story_points : 'none';
           if (!filters.storyPoints.includes(storyPointValue)) return false;
         }
+        if (filters.statuses.length > 0) {
+          const isResolved = story.resolved != null;
+          const statusValue = isResolved ? 'resolved' : 'unresolved';
+          if (!filters.statuses.includes(statusValue)) return false;
+        }
         // Apply date filters
         if (filters.createdStartDate || filters.createdEndDate) {
           const createdDate = new Date(story.created);
@@ -200,6 +216,11 @@ const JiraIssueReport = () => {
           const storyPointValue = (story.story_points && story.story_points > 0) ? story.story_points : 'none';
           if (!filters.storyPoints.includes(storyPointValue)) return false;
         }
+        if (filters.statuses.length > 0) {
+          const isResolved = story.resolved != null;
+          const statusValue = isResolved ? 'resolved' : 'unresolved';
+          if (!filters.statuses.includes(statusValue)) return false;
+        }
         // Apply date filters
         if (filters.createdStartDate || filters.createdEndDate) {
           const createdDate = new Date(story.created);
@@ -230,6 +251,11 @@ const JiraIssueReport = () => {
         // Apply other active filters but not story points filter
         if (filters.issueTypes.length > 0 && !filters.issueTypes.includes(story.issue_type)) return false;
         if (filters.sprints.length > 0 && !filters.sprints.includes(story.sprint)) return false;
+        if (filters.statuses.length > 0) {
+          const isResolved = story.resolved != null;
+          const statusValue = isResolved ? 'resolved' : 'unresolved';
+          if (!filters.statuses.includes(statusValue)) return false;
+        }
         // Apply date filters
         if (filters.createdStartDate || filters.createdEndDate) {
           const createdDate = new Date(story.created);
@@ -255,7 +281,44 @@ const JiraIssueReport = () => {
       }).length
     }));
 
-    return { issueTypeCounts, sprintCounts, storyPointCounts };
+    const statuses = ['resolved', 'unresolved'];
+    const statusCounts = statuses.map(status => ({
+      value: status,
+      count: processedStories.filter(story => {
+        // Apply other active filters but not status filter
+        if (filters.issueTypes.length > 0 && !filters.issueTypes.includes(story.issue_type)) return false;
+        if (filters.sprints.length > 0 && !filters.sprints.includes(story.sprint)) return false;
+        if (filters.storyPoints.length > 0) {
+          const storyPointValue = (story.story_points && story.story_points > 0) ? story.story_points : 'none';
+          if (!filters.storyPoints.includes(storyPointValue)) return false;
+        }
+        // Apply date filters
+        if (filters.createdStartDate || filters.createdEndDate) {
+          const createdDate = new Date(story.created);
+          if (filters.createdStartDate && createdDate < new Date(filters.createdStartDate)) return false;
+          if (filters.createdEndDate) {
+            const endDate = new Date(filters.createdEndDate);
+            endDate.setHours(23, 59, 59, 999);
+            if (createdDate > endDate) return false;
+          }
+        }
+        if (filters.resolvedStartDate || filters.resolvedEndDate) {
+          if (!story.resolved) return false;
+          const resolvedDate = new Date(story.resolved);
+          if (filters.resolvedStartDate && resolvedDate < new Date(filters.resolvedStartDate)) return false;
+          if (filters.resolvedEndDate) {
+            const endDate = new Date(filters.resolvedEndDate);
+            endDate.setHours(23, 59, 59, 999);
+            if (resolvedDate > endDate) return false;
+          }
+        }
+        const isResolved = story.resolved != null;
+        const statusValue = isResolved ? 'resolved' : 'unresolved';
+        return statusValue === status;
+      }).length
+    }));
+
+    return { issueTypeCounts, sprintCounts, storyPointCounts, statusCounts };
   };
 
   // Filter toggle functions
@@ -283,6 +346,15 @@ const JiraIssueReport = () => {
       storyPoints: prev.storyPoints.includes(points)
         ? prev.storyPoints.filter(p => p !== points)
         : [...prev.storyPoints, points]
+    }));
+  };
+
+  const toggleStatus = (status: string) => {
+    setFilters(prev => ({
+      ...prev,
+      statuses: prev.statuses.includes(status)
+        ? prev.statuses.filter(s => s !== status)
+        : [...prev.statuses, status]
     }));
   };
 
@@ -319,6 +391,7 @@ const JiraIssueReport = () => {
       issueTypes: [],
       sprints: [],
       storyPoints: [],
+      statuses: [],
       createdStartDate: '',
       createdEndDate: '',
       resolvedStartDate: '',
@@ -326,7 +399,7 @@ const JiraIssueReport = () => {
     });
   };
 
-  const hasActiveFilters = filters.issueTypes.length > 0 || filters.sprints.length > 0 || filters.storyPoints.length > 0 || filters.createdStartDate || filters.createdEndDate || filters.resolvedStartDate || filters.resolvedEndDate;
+  const hasActiveFilters = filters.issueTypes.length > 0 || filters.sprints.length > 0 || filters.storyPoints.length > 0 || filters.statuses.length > 0 || filters.createdStartDate || filters.createdEndDate || filters.resolvedStartDate || filters.resolvedEndDate;
 
   // Accordion toggle function
   const toggleAccordion = (section: keyof typeof accordionStates) => {
@@ -2393,7 +2466,7 @@ const JiraIssueReport = () => {
 
   // Sidebar Filter Component
   const FilterSidebar = () => {
-    const { issueTypeCounts, sprintCounts, storyPointCounts } = getFilterCounts();
+    const { issueTypeCounts, sprintCounts, storyPointCounts, statusCounts } = getFilterCounts();
 
     return (
       <div className="w-64 bg-gray-50 border-r border-gray-200 p-4 space-y-4 overflow-y-auto h-screen sticky top-0" style={{ minWidth: '256px' }}>
@@ -2571,6 +2644,34 @@ const JiraIssueReport = () => {
                   />
                   <span className="text-sm text-gray-700 flex-1">
                     {value === 'none' ? 'No Points' : `${value} points`}
+                  </span>
+                  <span className="text-xs text-gray-500">({count})</span>
+                </label>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Status Filter */}
+        <div>
+          <AccordionHeader
+            title="Status"
+            isOpen={accordionStates.status}
+            onClick={() => toggleAccordion('status')}
+            activeCount={filters.statuses.length}
+          />
+          {accordionStates.status && (
+            <div className="mt-3 space-y-2">
+              {statusCounts.map(({ value, count }) => (
+                <label key={value} className="flex items-center space-x-2 cursor-pointer hover:bg-gray-100 p-1 rounded">
+                  <input
+                    type="checkbox"
+                    checked={filters.statuses.includes(value)}
+                    onChange={() => toggleStatus(value)}
+                    className="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                  />
+                  <span className="text-sm text-gray-700 flex-1">
+                    {value === 'resolved' ? 'Resolved' : 'Unresolved'}
                   </span>
                   <span className="text-xs text-gray-500">({count})</span>
                 </label>

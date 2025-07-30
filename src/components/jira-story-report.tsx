@@ -411,7 +411,7 @@ const JiraIssueReport = () => {
 
   const calculateCycleTimes = (story: JiraIssue): StoryMetrics => {
     // Status constants - each status can have multiple possible values (lowercase for case insensitive matching)
-    const DRAFT_STATUSES = ['draft', 'defined - done'];
+    const OPEN_STATUSES = ['draft', 'defined - done'];
     const READY_FOR_GROOMING_STATUSES = ['ready for grooming'];
     const READY_FOR_DEV_STATUSES = ['ready for dev'];
     const IN_PROGRESS_STATUSES = ['in progress', 'dev in progress', 'in development'];
@@ -430,7 +430,7 @@ const JiraIssueReport = () => {
       reviewChurn: 0,
       qaChurn: 0,
       timestamps: {
-        draft: null,
+        opened: null,
         readyForDev: null,
         readyForGrooming: null,
         inProgress: null,
@@ -478,18 +478,19 @@ const JiraIssueReport = () => {
       let inProgressTime: Date | null = null;
       let inQATime: Date | null = null;
       let inReviewTime: Date | null = null;
-      let draftTime: Date | null = null;
+      let openTime: Date | null = null;
 
       // Process each status change
       for (const change of statusChanges) {
         const status = change.to_status?.toLowerCase() || '';
 
         // Track key status transitions
-        if (DRAFT_STATUSES.includes(status)) {
-          // Only capture the FIRST time entering Draft
-          if (!draftTime) {
-            draftTime = change.timestamp;
-            metrics.timestamps.draft = change.timestamp;
+        if (OPEN_STATUSES.includes(status)) {
+          console.log('Open status:', status, 'timestamp:', change.timestamp, 'id:', story.id);
+          // Only capture the FIRST time entering Open status
+          if (!openTime) {
+            openTime = change.timestamp;
+            metrics.timestamps.opened = change.timestamp;
           }
         } else if (READY_FOR_DEV_STATUSES.includes(status)) {
           metrics.timestamps.readyForDev = change.timestamp;
@@ -528,8 +529,8 @@ const JiraIssueReport = () => {
       }
 
       // Calculate cycle times (in days)
-      if (draftTime && doneTime && doneTime > draftTime) {
-        metrics.leadTime = Math.round((doneTime.getTime() - draftTime.getTime()) / (1000 * 60 * 60 * 24));
+      if (openTime && doneTime && doneTime > openTime) {
+        metrics.leadTime = Math.round((doneTime.getTime() - openTime.getTime()) / (1000 * 60 * 60 * 24));
       }
 
       if (readyForGroomingTime && inProgressTime && inProgressTime > readyForGroomingTime) {
@@ -938,7 +939,7 @@ const JiraIssueReport = () => {
     const totalStories = resolvedStories.length;
 
     resolvedStories.forEach(story => {
-      // If story went directly from Draft/Created to In Progress without Ready for Grooming
+      // If story went directly from Opened to In Progress without Ready for Grooming
       if (!story.metrics.timestamps.readyForGrooming && story.metrics.timestamps.inProgress) {
         skippedGrooming++;
       }
@@ -3120,7 +3121,7 @@ const JiraIssueReport = () => {
                           />
                           {hoveredTooltip === 'leadTime' && (
                             <div className="absolute top-full left-1/2 transform -translate-x-1/2 mt-2 bg-gray-900 text-white text-xs rounded py-2 px-3 whitespace-nowrap z-50 shadow-lg">
-                              First &quot;Draft&quot; → Last &quot;Done&quot;
+                              First &quot;Opened&quot; → Last &quot;Done&quot;
                               <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-b-4 border-transparent border-b-gray-900"></div>
                             </div>
                           )}
@@ -3207,6 +3208,9 @@ const JiraIssueReport = () => {
                       onClick={() => sortStories('metrics.qaChurn')}
                     >
                       QA Churn
+                    </th>
+                    <th className="px-3 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Opened
                     </th>
                     <th className="px-3 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
                       In Grooming
@@ -3317,6 +3321,9 @@ const JiraIssueReport = () => {
                         }`}>
                           {story.metrics.qaChurn}
                         </span>
+                      </td>
+                      <td className="px-3 py-4 whitespace-nowrap text-xs text-center text-gray-600">
+                        {formatTimestamp(story.metrics.timestamps.opened)}
                       </td>
                       <td className="px-3 py-4 whitespace-nowrap text-xs text-center text-gray-600">
                         {formatTimestamp(story.metrics.timestamps.readyForGrooming)}

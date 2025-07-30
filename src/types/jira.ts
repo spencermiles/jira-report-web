@@ -36,7 +36,7 @@ export interface StoryMetrics {
   reviewChurn: number;
   qaChurn: number;
   timestamps: {
-    draft: Date | null;
+    opened: Date | null;
     readyForDev: Date | null;
     readyForGrooming: Date | null;
     inProgress: Date | null;

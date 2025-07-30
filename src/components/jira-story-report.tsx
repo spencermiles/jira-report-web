@@ -480,14 +480,26 @@ const JiraIssueReport = () => {
       let inReviewTime: Date | null = null;
       let openTime: Date | null = null;
 
+      // Check if the first status change has an open status as from_status
+      // This handles cases where a story starts in an open status
+      if (statusChanges.length > 0) {
+        const firstChange = statusChanges[0];
+        const fromStatus = firstChange.from_status?.toLowerCase() || '';
+        if (OPEN_STATUSES.includes(fromStatus)) {
+          openTime = firstChange.timestamp;
+          metrics.timestamps.opened = firstChange.timestamp;
+          console.log('Open status from first transition:', fromStatus, 'timestamp:', firstChange.timestamp, 'id:', story.id);
+        }
+      }
+
       // Process each status change
       for (const change of statusChanges) {
         const status = change.to_status?.toLowerCase() || '';
 
         // Track key status transitions
         if (OPEN_STATUSES.includes(status)) {
-          console.log('Open status:', status, 'timestamp:', change.timestamp, 'id:', story.id);
-          // Only capture the FIRST time entering Open status
+          console.log('Open status (to_status):', status, 'timestamp:', change.timestamp, 'id:', story.id);
+          // Only capture the FIRST time entering Open status (if not already captured from from_status)
           if (!openTime) {
             openTime = change.timestamp;
             metrics.timestamps.opened = change.timestamp;

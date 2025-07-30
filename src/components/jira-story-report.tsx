@@ -39,7 +39,7 @@ const JiraIssueReport = () => {
   const [processedStories, setProcessedStories] = useState<ProcessedStory[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [sortConfig, setSortConfig] = useState<{ key: string; direction: 'asc' | 'desc' } | null>(null);
+  const [sortConfig, setSortConfig] = useState<{ key: string; direction: 'asc' | 'desc' } | null>({ key: 'resolved', direction: 'desc' });
   const [hoveredTooltip, setHoveredTooltip] = useState<TooltipType>(null);
   const [activeTab, setActiveTab] = useState<'metrics' | 'issues' | 'charts'>('metrics');
 
@@ -410,6 +410,17 @@ const JiraIssueReport = () => {
   };
 
   const calculateCycleTimes = (story: JiraIssue): StoryMetrics => {
+    // Status constants - each status can have multiple possible values (lowercase for case insensitive matching)
+    const DRAFT_STATUSES = ['draft', 'defined - done'];
+    const READY_FOR_GROOMING_STATUSES = ['ready for grooming'];
+    const READY_FOR_DEV_STATUSES = ['ready for dev'];
+    const IN_PROGRESS_STATUSES = ['in progress', 'dev in progress', 'in development'];
+    const IN_REVIEW_STATUSES = ['in review', 'in code review (pr submitted)', 'in review'];
+    const IN_QA_STATUSES = ['in qa', 'dev test', 'in testing'];
+    const READY_FOR_RELEASE_STATUSES = ['ready for release', 'ready for tranche 0'];
+    const BLOCKED_STATUSES = ['blocked', 'blocked / on hold'];
+    const DONE_STATUSES = ['done', 'ready for release'];
+
     const defaultMetrics: StoryMetrics = {
       leadTime: null,
       groomingCycleTime: null,
@@ -471,49 +482,47 @@ const JiraIssueReport = () => {
 
       // Process each status change
       for (const change of statusChanges) {
-        const status = change.to_status;
+        const status = change.to_status?.toLowerCase() || '';
 
         // Track key status transitions
-        if (status === 'Draft') {
+        if (DRAFT_STATUSES.includes(status)) {
           // Only capture the FIRST time entering Draft
           if (!draftTime) {
             draftTime = change.timestamp;
             metrics.timestamps.draft = change.timestamp;
           }
-        } else if (status === 'Ready for Dev') {
+        } else if (READY_FOR_DEV_STATUSES.includes(status)) {
           metrics.timestamps.readyForDev = change.timestamp;
-        } else if (status === 'Done') {
+        } else if (DONE_STATUSES.includes(status)) {
           doneTime = change.timestamp; // Always update to get the LAST time
           metrics.timestamps.done = change.timestamp;
-        } else if (status === 'Ready for Grooming') {
+        } else if (READY_FOR_GROOMING_STATUSES.includes(status)) {
           // Only capture the FIRST time entering Ready for Grooming
           if (!readyForGroomingTime) {
             readyForGroomingTime = change.timestamp;
             metrics.timestamps.readyForGrooming = change.timestamp;
           }
-        } else if (status === 'In Progress') {
+        } else if (IN_PROGRESS_STATUSES.includes(status)) {
           // Only capture the FIRST time entering In Progress
           if (!inProgressTime) {
             inProgressTime = change.timestamp;
             metrics.timestamps.inProgress = change.timestamp;
           }
-        } else if (status === 'In QA') {
-          // Capture FIRST time entering In QA for QA cycle time calculation
-          if (!inQATime) {
-            inQATime = change.timestamp;
-            metrics.timestamps.inQA = change.timestamp;
-          }
+        } else if (IN_QA_STATUSES.includes(status)) {
+          // Capture LAST time entering In QA for dev cycle time calculation
+          inQATime = change.timestamp; // Always update to get the LAST time
+          metrics.timestamps.inQA = change.timestamp;
           metrics.qaChurn++;
-        } else if (status === 'Ready For Release') {
+        } else if (READY_FOR_RELEASE_STATUSES.includes(status)) {
           metrics.timestamps.readyForRelease = change.timestamp;
-        } else if (status === 'In Review') {
+        } else if (IN_REVIEW_STATUSES.includes(status)) {
           // Only capture the FIRST time entering In Review for the timestamp display
           if (!inReviewTime) {
             inReviewTime = change.timestamp;
             metrics.timestamps.inReview = change.timestamp;
           }
           metrics.reviewChurn++;
-        } else if (status === 'Blocked' || status === 'Blocked / On Hold') {
+        } else if (BLOCKED_STATUSES.includes(status)) {
           metrics.blockers++;
         }
       }
@@ -618,6 +627,7 @@ const JiraIssueReport = () => {
             resolved: issue.resolved || undefined,
             story_points: issue.story_points || undefined,
             subIssueCount: subIssueCount,
+            web_url: issue.web_url || undefined,
             metrics: metrics
           });
         } catch (storyErr) {
@@ -1052,7 +1062,7 @@ const JiraIssueReport = () => {
       return d.toISOString().split('T')[0];
     };
 
-    // Group by week and calculate weekly averages
+    // Group by week and calculate weekly medians
     const weeklyGroups: Record<string, number[]> = {};
     
     validStories.forEach(story => {
@@ -1063,30 +1073,42 @@ const JiraIssueReport = () => {
       weeklyGroups[weekStart].push(story.devCycleTime);
     });
 
-    // Calculate weekly averages and moving averages
+    // Calculate weekly medians and moving averages
     const weeklyData = Object.entries(weeklyGroups)
-      .map(([week, cycleTimes]) => ({
-        week,
-        avgCycleTime: Math.round((cycleTimes.reduce((sum, time) => sum + time, 0) / cycleTimes.length) * 10) / 10,
-        medianCycleTime: cycleTimes.length > 0 ? 
-          cycleTimes.sort((a, b) => a - b)[Math.floor(cycleTimes.length / 2)] : 0,
-        count: cycleTimes.length
-      }))
+      .map(([week, cycleTimes]) => {
+        const sorted = [...cycleTimes].sort((a, b) => a - b);
+        const median = sorted.length > 0 ? 
+          (sorted.length % 2 === 0 ? 
+            (sorted[sorted.length / 2 - 1] + sorted[sorted.length / 2]) / 2 : 
+            sorted[Math.floor(sorted.length / 2)]) : 0;
+        
+        return {
+          week,
+          medianCycleTime: Math.round(median * 10) / 10,
+          avgCycleTime: Math.round((cycleTimes.reduce((sum, time) => sum + time, 0) / cycleTimes.length) * 10) / 10, // Keep for tooltip
+          count: cycleTimes.length
+        };
+      })
       .sort((a, b) => a.week.localeCompare(b.week));
 
-    // Calculate 4-week moving average
+    // Calculate 4-week moving median
     const movingAverageWindow = 4;
     const weeklyDataWithMA = weeklyData.map((item, index) => {
-      let movingAverage = item.avgCycleTime;
+      let movingMedian = item.medianCycleTime;
       
       if (index >= movingAverageWindow - 1) {
         const windowData = weeklyData.slice(index - movingAverageWindow + 1, index + 1);
-        movingAverage = Math.round((windowData.reduce((sum, d) => sum + d.avgCycleTime, 0) / windowData.length) * 10) / 10;
+        const allMedians = windowData.map(d => d.medianCycleTime);
+        const sortedMedians = allMedians.sort((a, b) => a - b);
+        movingMedian = sortedMedians.length % 2 === 0 ? 
+          (sortedMedians[sortedMedians.length / 2 - 1] + sortedMedians[sortedMedians.length / 2]) / 2 :
+          sortedMedians[Math.floor(sortedMedians.length / 2)];
+        movingMedian = Math.round(movingMedian * 10) / 10;
       }
       
       return {
         ...item,
-        movingAverage
+        movingAverage: movingMedian
       };
     });
 
@@ -1138,27 +1160,39 @@ const JiraIssueReport = () => {
     });
 
     const weeklyData = Object.entries(weeklyGroups)
-      .map(([week, leadTimes]) => ({
-        week,
-        avgCycleTime: Math.round((leadTimes.reduce((sum, time) => sum + time, 0) / leadTimes.length) * 10) / 10,
-        medianCycleTime: leadTimes.length > 0 ? 
-          leadTimes.sort((a, b) => a - b)[Math.floor(leadTimes.length / 2)] : 0,
-        count: leadTimes.length
-      }))
+      .map(([week, leadTimes]) => {
+        const sorted = [...leadTimes].sort((a, b) => a - b);
+        const median = sorted.length > 0 ? 
+          (sorted.length % 2 === 0 ? 
+            (sorted[sorted.length / 2 - 1] + sorted[sorted.length / 2]) / 2 : 
+            sorted[Math.floor(sorted.length / 2)]) : 0;
+        
+        return {
+          week,
+          medianCycleTime: Math.round(median * 10) / 10,
+          avgCycleTime: Math.round((leadTimes.reduce((sum, time) => sum + time, 0) / leadTimes.length) * 10) / 10, // Keep for tooltip
+          count: leadTimes.length
+        };
+      })
       .sort((a, b) => a.week.localeCompare(b.week));
 
     const movingAverageWindow = 4;
     const weeklyDataWithMA = weeklyData.map((item, index) => {
-      let movingAverage = item.avgCycleTime;
+      let movingMedian = item.medianCycleTime;
       
       if (index >= movingAverageWindow - 1) {
         const windowData = weeklyData.slice(index - movingAverageWindow + 1, index + 1);
-        movingAverage = Math.round((windowData.reduce((sum, d) => sum + d.avgCycleTime, 0) / windowData.length) * 10) / 10;
+        const allMedians = windowData.map(d => d.medianCycleTime);
+        const sortedMedians = allMedians.sort((a, b) => a - b);
+        movingMedian = sortedMedians.length % 2 === 0 ? 
+          (sortedMedians[sortedMedians.length / 2 - 1] + sortedMedians[sortedMedians.length / 2]) / 2 :
+          sortedMedians[Math.floor(sortedMedians.length / 2)];
+        movingMedian = Math.round(movingMedian * 10) / 10;
       }
       
       return {
         ...item,
-        movingAverage
+        movingAverage: movingMedian
       };
     });
 
@@ -1209,27 +1243,39 @@ const JiraIssueReport = () => {
     });
 
     const weeklyData = Object.entries(weeklyGroups)
-      .map(([week, cycleTimes]) => ({
-        week,
-        avgCycleTime: Math.round((cycleTimes.reduce((sum, time) => sum + time, 0) / cycleTimes.length) * 10) / 10,
-        medianCycleTime: cycleTimes.length > 0 ? 
-          cycleTimes.sort((a, b) => a - b)[Math.floor(cycleTimes.length / 2)] : 0,
-        count: cycleTimes.length
-      }))
+      .map(([week, cycleTimes]) => {
+        const sorted = [...cycleTimes].sort((a, b) => a - b);
+        const median = sorted.length > 0 ? 
+          (sorted.length % 2 === 0 ? 
+            (sorted[sorted.length / 2 - 1] + sorted[sorted.length / 2]) / 2 : 
+            sorted[Math.floor(sorted.length / 2)]) : 0;
+        
+        return {
+          week,
+          medianCycleTime: Math.round(median * 10) / 10,
+          avgCycleTime: Math.round((cycleTimes.reduce((sum, time) => sum + time, 0) / cycleTimes.length) * 10) / 10, // Keep for tooltip
+          count: cycleTimes.length
+        };
+      })
       .sort((a, b) => a.week.localeCompare(b.week));
 
     const movingAverageWindow = 4;
     const weeklyDataWithMA = weeklyData.map((item, index) => {
-      let movingAverage = item.avgCycleTime;
+      let movingMedian = item.medianCycleTime;
       
       if (index >= movingAverageWindow - 1) {
         const windowData = weeklyData.slice(index - movingAverageWindow + 1, index + 1);
-        movingAverage = Math.round((windowData.reduce((sum, d) => sum + d.avgCycleTime, 0) / windowData.length) * 10) / 10;
+        const allMedians = windowData.map(d => d.medianCycleTime);
+        const sortedMedians = allMedians.sort((a, b) => a - b);
+        movingMedian = sortedMedians.length % 2 === 0 ? 
+          (sortedMedians[sortedMedians.length / 2 - 1] + sortedMedians[sortedMedians.length / 2]) / 2 :
+          sortedMedians[Math.floor(sortedMedians.length / 2)];
+        movingMedian = Math.round(movingMedian * 10) / 10;
       }
       
       return {
         ...item,
-        movingAverage
+        movingAverage: movingMedian
       };
     });
 
@@ -1563,8 +1609,8 @@ const JiraIssueReport = () => {
       datasets: [
         {
           type: 'line' as const,
-          label: 'Weekly Average',
-          data: weeklyData.map(d => d.avgCycleTime),
+          label: 'Weekly Median',
+          data: weeklyData.map(d => d.medianCycleTime),
           borderColor: '#3b82f6',
           backgroundColor: 'rgba(59, 130, 246, 0.1)',
           borderWidth: 2,
@@ -1575,7 +1621,7 @@ const JiraIssueReport = () => {
         },
         {
           type: 'line' as const,
-          label: '4-Week Moving Average',
+          label: '4-Week Moving Median',
           data: weeklyData.map(d => d.movingAverage),
           borderColor: '#ef4444',
           backgroundColor: 'rgba(239, 68, 68, 0.1)',
@@ -1622,7 +1668,7 @@ const JiraIssueReport = () => {
                 const week = weeklyData[dataIndex];
                 return [
                   `Issues this week: ${week.count}`,
-                  `Median: ${week.medianCycleTime} days`
+                  `Average: ${week.avgCycleTime} days`
                 ];
               }
               return [];
@@ -1670,8 +1716,8 @@ const JiraIssueReport = () => {
         </div>
         
         <div className="mt-4 text-sm text-gray-600">
-          <p><strong>Weekly Average:</strong> Average dev cycle time for issues resolved each week</p>
-          <p><strong>4-Week Moving Average:</strong> Smoothed trend line showing overall direction</p>
+          <p><strong>Weekly Median:</strong> Median dev cycle time for issues resolved each week</p>
+          <p><strong>4-Week Moving Median:</strong> Smoothed trend line showing overall direction</p>
           <p><strong>Overall Median:</strong> Reference line for comparison ({overallMedian} days)</p>
         </div>
       </div>
@@ -1716,8 +1762,8 @@ const JiraIssueReport = () => {
       datasets: [
         {
           type: 'line' as const,
-          label: 'Weekly Average',
-          data: weeklyData.map(d => d.avgCycleTime),
+          label: 'Weekly Median',
+          data: weeklyData.map(d => d.medianCycleTime),
           borderColor: '#8b5cf6',
           backgroundColor: 'rgba(139, 92, 246, 0.1)',
           borderWidth: 2,
@@ -1728,7 +1774,7 @@ const JiraIssueReport = () => {
         },
         {
           type: 'line' as const,
-          label: '4-Week Moving Average',
+          label: '4-Week Moving Median',
           data: weeklyData.map(d => d.movingAverage),
           borderColor: '#ef4444',
           backgroundColor: 'rgba(239, 68, 68, 0.1)',
@@ -1775,7 +1821,7 @@ const JiraIssueReport = () => {
                 const week = weeklyData[dataIndex];
                 return [
                   `Issues this week: ${week.count}`,
-                  `Median: ${week.medianCycleTime} days`
+                  `Average: ${week.avgCycleTime} days`
                 ];
               }
               return [];
@@ -1823,8 +1869,8 @@ const JiraIssueReport = () => {
         </div>
         
         <div className="mt-4 text-sm text-gray-600">
-          <p><strong>Weekly Average:</strong> Average lead time for issues resolved each week</p>
-          <p><strong>4-Week Moving Average:</strong> Smoothed trend line showing overall direction</p>
+          <p><strong>Weekly Median:</strong> Median lead time for issues resolved each week</p>
+          <p><strong>4-Week Moving Median:</strong> Smoothed trend line showing overall direction</p>
           <p><strong>Overall Median:</strong> Reference line for comparison ({overallMedian} days)</p>
         </div>
       </div>
@@ -3184,7 +3230,7 @@ const JiraIssueReport = () => {
                     <tr key={story.id} className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
                       <td className="px-4 py-4 whitespace-nowrap">
                         <a 
-                          href={`https://rwaapps.atlassian.net/browse/${story.key}`}
+                          href={story.web_url || `https://rwaapps.atlassian.net/browse/${story.key}`}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline"

@@ -22,6 +22,7 @@ export interface JiraIssue {
   resolved?: string;
   story_points?: number;
   parent_key?: string;
+  web_url?: string;
   changelogs: JiraChangelog[];
   sprint_info?: JiraSprint[];
 }
@@ -56,6 +57,7 @@ export interface ProcessedStory {
   resolved?: string;
   story_points?: number;
   subIssueCount: number;
+  web_url?: string;
   metrics: StoryMetrics;
 }
 

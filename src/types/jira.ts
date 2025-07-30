@@ -29,6 +29,7 @@ export interface JiraIssue {
 
 export interface StoryMetrics {
   leadTime: number | null;
+  cycleTime: number | null;
   groomingCycleTime: number | null;
   devCycleTime: number | null;
   qaCycleTime: number | null;
@@ -70,4 +71,4 @@ export interface StatsResult {
   count: number;
 }
 
-export type TooltipType = 'leadTime' | 'grooming' | 'dev' | 'qa' | null; 
+export type TooltipType = 'leadTime' | 'cycleTime' | 'grooming' | 'dev' | 'qa' | null; 

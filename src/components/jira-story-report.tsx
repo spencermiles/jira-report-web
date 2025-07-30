@@ -411,7 +411,6 @@ const JiraIssueReport = () => {
 
   const calculateCycleTimes = (story: JiraIssue): StoryMetrics => {
     // Status constants - each status can have multiple possible values (lowercase for case insensitive matching)
-    const OPEN_STATUSES = ['draft', 'defined - done'];
     const READY_FOR_GROOMING_STATUSES = ['ready for grooming'];
     const READY_FOR_DEV_STATUSES = ['ready for dev'];
     const IN_PROGRESS_STATUSES = ['in progress', 'dev in progress', 'in development'];
@@ -423,6 +422,7 @@ const JiraIssueReport = () => {
 
     const defaultMetrics: StoryMetrics = {
       leadTime: null,
+      cycleTime: null,
       groomingCycleTime: null,
       devCycleTime: null,
       qaCycleTime: null,
@@ -478,18 +478,11 @@ const JiraIssueReport = () => {
       let inProgressTime: Date | null = null;
       let inQATime: Date | null = null;
       let inReviewTime: Date | null = null;
-      let openTime: Date | null = null;
-
-      // Check if the first status change has an open status as from_status
-      // This handles cases where a story starts in an open status
-      if (statusChanges.length > 0) {
-        const firstChange = statusChanges[0];
-        const fromStatus = firstChange.from_status?.toLowerCase() || '';
-        if (OPEN_STATUSES.includes(fromStatus)) {
-          openTime = firstChange.timestamp;
-          metrics.timestamps.opened = firstChange.timestamp;
-          console.log('Open status from first transition:', fromStatus, 'timestamp:', firstChange.timestamp, 'id:', story.id);
-        }
+      
+      // Use the issue creation date as the opened time (simpler and more accurate)
+      const openTime = story.created ? new Date(story.created) : null;
+      if (openTime) {
+        metrics.timestamps.opened = openTime;
       }
 
       // Process each status change
@@ -497,14 +490,7 @@ const JiraIssueReport = () => {
         const status = change.to_status?.toLowerCase() || '';
 
         // Track key status transitions
-        if (OPEN_STATUSES.includes(status)) {
-          console.log('Open status (to_status):', status, 'timestamp:', change.timestamp, 'id:', story.id);
-          // Only capture the FIRST time entering Open status (if not already captured from from_status)
-          if (!openTime) {
-            openTime = change.timestamp;
-            metrics.timestamps.opened = change.timestamp;
-          }
-        } else if (READY_FOR_DEV_STATUSES.includes(status)) {
+        if (READY_FOR_DEV_STATUSES.includes(status)) {
           metrics.timestamps.readyForDev = change.timestamp;
         } else if (DONE_STATUSES.includes(status)) {
           doneTime = change.timestamp; // Always update to get the LAST time
@@ -555,6 +541,11 @@ const JiraIssueReport = () => {
 
       if (inQATime && doneTime && doneTime > inQATime) {
         metrics.qaCycleTime = Math.round((doneTime.getTime() - inQATime.getTime()) / (1000 * 60 * 60 * 24));
+      }
+
+      // Calculate total cycle time: In Progress → Done
+      if (inProgressTime && doneTime && doneTime > inProgressTime) {
+        metrics.cycleTime = Math.round((doneTime.getTime() - inProgressTime.getTime()) / (1000 * 60 * 60 * 24));
       }
 
       return metrics;
@@ -951,7 +942,7 @@ const JiraIssueReport = () => {
     const totalStories = resolvedStories.length;
 
     resolvedStories.forEach(story => {
-      // If story went directly from Opened to In Progress without Ready for Grooming
+      // If story went directly from Created to In Progress without Ready for Grooming
       if (!story.metrics.timestamps.readyForGrooming && story.metrics.timestamps.inProgress) {
         skippedGrooming++;
       }
@@ -1212,6 +1203,89 @@ const JiraIssueReport = () => {
     const rawData = validStories.map(story => ({
       date: story.resolvedDate.toISOString().split('T')[0],
       cycleTime: story.leadTime,
+      key: story.key
+    }));
+
+    return { weeklyData: weeklyDataWithMA, rawData };
+  };
+
+  // Cycle time trend data processing
+  const getCycleTimeTrendData = () => {
+    const validStories = filteredStories
+      .filter(story => 
+        story.resolved && 
+        story.metrics.cycleTime !== null && 
+        story.metrics.cycleTime > 0
+      )
+      .map(story => ({
+        resolvedDate: new Date(story.resolved!),
+        cycleTime: story.metrics.cycleTime!,
+        key: story.key
+      }))
+      .sort((a, b) => a.resolvedDate.getTime() - b.resolvedDate.getTime());
+
+    if (validStories.length === 0) {
+      return { weeklyData: [], rawData: [] };
+    }
+
+    const getWeekStart = (date: Date): string => {
+      const d = new Date(date);
+      const day = d.getDay();
+      const diff = d.getDate() - day + (day === 0 ? -6 : 1);
+      d.setDate(diff);
+      return d.toISOString().split('T')[0];
+    };
+
+    const weeklyGroups: Record<string, number[]> = {};
+    
+    validStories.forEach(story => {
+      const weekStart = getWeekStart(story.resolvedDate);
+      if (!weeklyGroups[weekStart]) {
+        weeklyGroups[weekStart] = [];
+      }
+      weeklyGroups[weekStart].push(story.cycleTime);
+    });
+
+    const weeklyData = Object.entries(weeklyGroups)
+      .map(([week, cycleTimes]) => {
+        const sorted = [...cycleTimes].sort((a, b) => a - b);
+        const median = sorted.length > 0 ? 
+          (sorted.length % 2 === 0 ? 
+            (sorted[sorted.length / 2 - 1] + sorted[sorted.length / 2]) / 2 : 
+            sorted[Math.floor(sorted.length / 2)]) : 0;
+        
+        return {
+          week,
+          medianCycleTime: Math.round(median * 10) / 10,
+          avgCycleTime: Math.round((cycleTimes.reduce((sum, time) => sum + time, 0) / cycleTimes.length) * 10) / 10, // Keep for tooltip
+          count: cycleTimes.length
+        };
+      })
+      .sort((a, b) => a.week.localeCompare(b.week));
+
+    const movingAverageWindow = 4;
+    const weeklyDataWithMA = weeklyData.map((item, index) => {
+      let movingMedian = item.medianCycleTime;
+      
+      if (index >= movingAverageWindow - 1) {
+        const windowData = weeklyData.slice(index - movingAverageWindow + 1, index + 1);
+        const allMedians = windowData.map(d => d.medianCycleTime);
+        const sortedMedians = allMedians.sort((a, b) => a - b);
+        movingMedian = sortedMedians.length % 2 === 0 ? 
+          (sortedMedians[sortedMedians.length / 2 - 1] + sortedMedians[sortedMedians.length / 2]) / 2 :
+          sortedMedians[Math.floor(sortedMedians.length / 2)];
+        movingMedian = Math.round(movingMedian * 10) / 10;
+      }
+      
+      return {
+        ...item,
+        movingAverage: movingMedian
+      };
+    });
+
+    const rawData = validStories.map(story => ({
+      date: story.resolvedDate.toISOString().split('T')[0],
+      cycleTime: story.cycleTime,
       key: story.key
     }));
 
@@ -1883,6 +1957,159 @@ const JiraIssueReport = () => {
         
         <div className="mt-4 text-sm text-gray-600">
           <p><strong>Weekly Median:</strong> Median lead time for issues resolved each week</p>
+          <p><strong>4-Week Moving Median:</strong> Smoothed trend line showing overall direction</p>
+          <p><strong>Overall Median:</strong> Reference line for comparison ({overallMedian} days)</p>
+        </div>
+      </div>
+    );
+  };
+
+  const CycleTimeTrendChart = ({ 
+    height = 400
+  }: { 
+    height?: number;
+  }) => {
+    const { weeklyData, rawData } = getCycleTimeTrendData();
+    
+    if (weeklyData.length === 0) {
+      return (
+        <div className="bg-white border border-gray-200 rounded-lg p-6">
+          <h3 className="text-lg font-semibold text-gray-900 mb-4">Cycle Time Trend</h3>
+          <div className="flex items-center justify-center h-64 text-gray-500">
+            No cycle time data available
+          </div>
+        </div>
+      );
+    }
+
+    const formatWeekLabel = (weekStr: string) => {
+      try {
+        return new Date(weekStr).toLocaleDateString('en-US', { 
+          month: 'short', 
+          day: 'numeric' 
+        });
+      } catch {
+        return weekStr;
+      }
+    };
+
+    const allTimes = rawData.map(d => d.cycleTime);
+    const overallMedian = allTimes.length > 0 ? 
+      allTimes.sort((a, b) => a - b)[Math.floor(allTimes.length / 2)] : 0;
+
+    const chartData = {
+      labels: weeklyData.map(d => formatWeekLabel(d.week)),
+      datasets: [
+        {
+          type: 'line' as const,
+          label: 'Weekly Median',
+          data: weeklyData.map(d => d.medianCycleTime),
+          borderColor: '#10b981',
+          backgroundColor: 'rgba(16, 185, 129, 0.1)',
+          borderWidth: 2,
+          fill: false,
+          tension: 0.1,
+          pointRadius: 4,
+          pointHoverRadius: 6,
+        },
+        {
+          type: 'line' as const,
+          label: '4-Week Moving Median',
+          data: weeklyData.map(d => d.movingAverage),
+          borderColor: '#ef4444',
+          backgroundColor: 'rgba(239, 68, 68, 0.1)',
+          borderWidth: 3,
+          fill: false,
+          tension: 0.2,
+          pointRadius: 0,
+          pointHoverRadius: 4,
+        },
+        {
+          type: 'line' as const,
+          label: `Overall Median (${overallMedian} days)`,
+          data: weeklyData.map(() => overallMedian),
+          borderColor: '#6b7280',
+          backgroundColor: 'rgba(107, 114, 128, 0.1)',
+          borderWidth: 1,
+          borderDash: [5, 5],
+          fill: false,
+          pointRadius: 0,
+          pointHoverRadius: 0,
+        },
+      ],
+    };
+
+    const options = {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        title: {
+          display: false,
+        },
+        legend: {
+          position: 'bottom' as const,
+          labels: {
+            usePointStyle: true,
+            padding: 20,
+          },
+        },
+        tooltip: {
+          callbacks: {
+            afterBody: (context: TooltipItem<'line'>[]) => {
+              const dataIndex = context[0]?.dataIndex;
+              if (dataIndex !== undefined && weeklyData[dataIndex]) {
+                const week = weeklyData[dataIndex];
+                return [
+                  `Issues this week: ${week.count}`,
+                  `Average: ${week.avgCycleTime} days`
+                ];
+              }
+              return [];
+            }
+          }
+        }
+      },
+      scales: {
+        x: {
+          grid: {
+            display: false,
+          },
+          ticks: {
+            maxTicksLimit: 12,
+          },
+        },
+        y: {
+          beginAtZero: true,
+          grid: {
+            color: '#f3f4f6',
+          },
+          title: {
+            display: true,
+            text: 'Cycle Time (days)'
+          }
+        },
+      },
+      interaction: {
+        intersect: false,
+        mode: 'index' as const,
+      },
+    };
+    
+    return (
+      <div className="bg-white border border-gray-200 rounded-lg p-6">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-lg font-semibold text-gray-900">Cycle Time Trend</h3>
+          <div className="text-sm text-gray-500">
+            {rawData.length} resolved issues
+          </div>
+        </div>
+        
+        <div style={{ height: `${height}px` }}>
+          <Line data={chartData} options={options} />
+        </div>
+        
+        <div className="mt-4 text-sm text-gray-600">
+          <p><strong>Weekly Median:</strong> Median cycle time for issues resolved each week</p>
           <p><strong>4-Week Moving Median:</strong> Smoothed trend line showing overall direction</p>
           <p><strong>Overall Median:</strong> Reference line for comparison ({overallMedian} days)</p>
         </div>
@@ -2856,10 +3083,15 @@ const JiraIssueReport = () => {
                     ({filteredStories.filter(s => !s.resolved).length} unresolved excluded)
                   </div>
                 </div>
-            <div className="grid grid-cols-4 gap-4 mb-4">
+            <div className="grid grid-cols-5 gap-4 mb-4">
               <StatCard 
                 title="Lead Time" 
                 stats={calculateStats(filteredStories.filter(s => s.resolved).map(s => s.metrics.leadTime))} 
+                unit=" days" 
+              />
+              <StatCard 
+                title="Cycle Time" 
+                stats={calculateStats(filteredStories.filter(s => s.resolved).map(s => s.metrics.cycleTime))} 
                 unit=" days" 
               />
               <StatCard 
@@ -3133,7 +3365,28 @@ const JiraIssueReport = () => {
                           />
                           {hoveredTooltip === 'leadTime' && (
                             <div className="absolute top-full left-1/2 transform -translate-x-1/2 mt-2 bg-gray-900 text-white text-xs rounded py-2 px-3 whitespace-nowrap z-50 shadow-lg">
-                              First &quot;Opened&quot; → Last &quot;Done&quot;
+                              Issue Created → Last &quot;Done&quot;
+                              <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-b-4 border-transparent border-b-gray-900"></div>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </th>
+                    <th 
+                      className="px-3 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                      onClick={() => sortStories('metrics.cycleTime')}
+                    >
+                      <div className="flex items-center justify-center">
+                        <span>Cycle Time (days)</span>
+                        <div className="relative ml-1">
+                          <HelpCircle 
+                            className="h-4 w-4 text-gray-400 hover:text-gray-600 cursor-help" 
+                            onMouseEnter={() => setHoveredTooltip('cycleTime')}
+                            onMouseLeave={() => setHoveredTooltip(null)}
+                          />
+                          {hoveredTooltip === 'cycleTime' && (
+                            <div className="absolute top-full left-1/2 transform -translate-x-1/2 mt-2 bg-gray-900 text-white text-xs rounded py-2 px-3 whitespace-nowrap z-50 shadow-lg">
+                              First &quot;In Progress&quot; → Last &quot;Done&quot;
                               <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-b-4 border-transparent border-b-gray-900"></div>
                             </div>
                           )}
@@ -3298,6 +3551,16 @@ const JiraIssueReport = () => {
                           {story.metrics.leadTime === null ? '-' : story.metrics.leadTime}
                         </span>
                       </td>
+                      <td className="px-3 py-4 whitespace-nowrap text-sm text-center">
+                        <span className={`px-2 py-1 text-xs rounded-full ${
+                          story.metrics.cycleTime === null ? 'bg-gray-100 text-gray-500' :
+                          story.metrics.cycleTime > 30 ? 'bg-red-100 text-red-800' :
+                          story.metrics.cycleTime > 14 ? 'bg-yellow-100 text-yellow-800' :
+                          'bg-green-100 text-green-800'
+                        }`}>
+                          {story.metrics.cycleTime === null ? '-' : story.metrics.cycleTime}
+                        </span>
+                      </td>
                       <td className="px-3 py-4 whitespace-nowrap text-sm text-center text-gray-700">
                         {story.metrics.groomingCycleTime === null ? '-' : story.metrics.groomingCycleTime}
                       </td>
@@ -3376,6 +3639,11 @@ const JiraIssueReport = () => {
                 {/* Lead Time Trend */}
                 <div className="mb-8">
                   <LeadTimeTrendChart />
+                </div>
+
+                {/* Cycle Time Trend */}
+                <div className="mb-8">
+                  <CycleTimeTrendChart />
                 </div>
 
                 {/* Grooming Cycle Time Trend */}

@@ -18,6 +18,7 @@ export interface JiraIssue {
   key: string;
   summary: string;
   issue_type: string;
+  project_key: string;
   created: string;
   resolved?: string;
   story_points?: number;
@@ -53,6 +54,7 @@ export interface ProcessedStory {
   key: string;
   summary: string;
   issue_type: string;
+  project_key: string;
   sprint: string;
   created: string;
   resolved?: string;

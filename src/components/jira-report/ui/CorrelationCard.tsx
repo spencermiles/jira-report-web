@@ -1,0 +1,138 @@
+import React, { useState } from 'react';
+import { HelpCircle } from 'lucide-react';
+
+interface HelpContent {
+  title: string;
+  description: string;
+  calculation: string;
+  interpretation: string;
+}
+
+interface CorrelationCardProps {
+  title: string;
+  correlation: number;
+  count: number;
+  description: string;
+  helpContent: HelpContent;
+}
+
+const MetricHelpPopover: React.FC<HelpContent> = ({ 
+  title, 
+  description, 
+  calculation, 
+  interpretation 
+}) => {
+  const [isVisible, setIsVisible] = useState(false);
+
+  return (
+    <div className="relative inline-block">
+      <button
+        onMouseEnter={() => setIsVisible(true)}
+        onMouseLeave={() => setIsVisible(false)}
+        className="text-gray-400 hover:text-gray-600 transition-colors"
+      >
+        <HelpCircle className="w-4 h-4" />
+      </button>
+      
+      {isVisible && (
+        <div className="absolute z-50 w-80 p-4 bg-white border border-gray-200 rounded-lg shadow-lg -top-2 left-6">
+          <div className="space-y-3">
+            <h4 className="font-semibold text-gray-900 text-sm">{title}</h4>
+            
+            <div>
+              <h5 className="font-medium text-gray-700 text-xs mb-1">What it measures:</h5>
+              <p className="text-xs text-gray-600 leading-relaxed">{description}</p>
+            </div>
+            
+            <div>
+              <h5 className="font-medium text-gray-700 text-xs mb-1">How it&apos;s calculated:</h5>
+              <p className="text-xs text-gray-600 leading-relaxed">{calculation}</p>
+            </div>
+            
+            <div>
+              <h5 className="font-medium text-gray-700 text-xs mb-1">How to interpret:</h5>
+              <p className="text-xs text-gray-600 leading-relaxed">{interpretation}</p>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+const CorrelationCard: React.FC<CorrelationCardProps> = ({ 
+  title, 
+  correlation, 
+  count, 
+  description,
+  helpContent
+}) => {
+  const getCorrelationColor = (r: number) => {
+    const absR = Math.abs(r);
+    if (absR >= 0.7) return 'text-green-600';
+    if (absR >= 0.5) return 'text-yellow-600';
+    if (absR >= 0.3) return 'text-orange-600';
+    return 'text-red-600';
+  };
+
+  const getCorrelationStrength = (r: number) => {
+    const absR = Math.abs(r);
+    if (absR >= 0.7) return 'Strong';
+    if (absR >= 0.5) return 'Moderate';
+    if (absR >= 0.3) return 'Weak';
+    return 'Very Weak';
+  };
+
+  const getSimpleExplanation = (r: number, description: string) => {
+    const absR = Math.abs(r);
+    const direction = r >= 0 ? 'increases' : 'decreases';
+    
+    if (absR >= 0.7) {
+      return `Strong relationship: ${description} ${direction} together reliably.`;
+    } else if (absR >= 0.5) {
+      return `Moderate relationship: ${description} ${direction} together sometimes.`;
+    } else if (absR >= 0.3) {
+      return `Weak relationship: ${description} might ${direction === 'increases' ? 'increase' : 'decrease'} together.`;
+    } else {
+      return `Very weak relationship: ${description} don't really ${direction === 'increases' ? 'increase' : 'decrease'} together.`;
+    }
+  };
+
+  return (
+    <div className="bg-white border border-gray-200 rounded-lg p-4 shadow-sm">
+      <div className="flex items-center justify-between mb-2">
+        <h3 className="text-sm font-medium text-gray-500 uppercase tracking-wider">{title}</h3>
+        <MetricHelpPopover {...helpContent} />
+      </div>
+      <div className={`text-2xl font-bold mb-1 ${getCorrelationColor(correlation)}`}>
+        {correlation}
+        <span className="text-sm font-normal text-gray-500 ml-1">r-value</span>
+      </div>
+      <div className="text-xs text-gray-600 space-y-1">
+        <div className="flex justify-between">
+          <span>Strength:</span>
+          <span>{getCorrelationStrength(correlation)}</span>
+        </div>
+        <div className="flex justify-between">
+          <span>Direction:</span>
+          <span>{correlation >= 0 ? 'Positive' : 'Negative'}</span>
+        </div>
+        <div className="flex justify-between">
+          <span>Sample Size:</span>
+          <span>{count}</span>
+        </div>
+        <div className="flex justify-between">
+          <span>R²:</span>
+          <span>{Math.round(correlation * correlation * 1000) / 1000}</span>
+        </div>
+      </div>
+      <div className="mt-2 pt-2 border-t border-gray-100">
+        <p className="text-xs text-gray-500 leading-relaxed">
+          {getSimpleExplanation(correlation, description)}
+        </p>
+      </div>
+    </div>
+  );
+};
+
+export default CorrelationCard;

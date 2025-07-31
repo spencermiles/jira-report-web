@@ -1,5 +1,5 @@
-import JiraStoryReport from '@/components/jira-story-report';
+import JiraIssueReport from '@/components/jira-report';
 
 export default function Home() {
-  return <JiraStoryReport />;
+  return <JiraIssueReport />;
 }

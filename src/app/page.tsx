@@ -1,5 +1,5 @@
-import JiraIssueReport from '@/components/jira-report';
+import Projects from '@/components/projects/Projects';
 
 export default function Home() {
-  return <JiraIssueReport />;
+  return <Projects />;
 }

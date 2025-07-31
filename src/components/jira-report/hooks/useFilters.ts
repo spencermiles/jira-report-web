@@ -28,13 +28,13 @@ interface FilterCount {
   count: number;
 }
 
-export const useFilters = (processedStories: ProcessedStory[]) => {
+export const useFilters = (processedStories: ProcessedStory[], preselectedProjectKey?: string) => {
   const [filters, setFilters] = useState<FilterState>({
     issueTypes: ['Story'],
     sprints: [],
     storyPoints: [],
     statuses: ['resolved'],
-    projectKeys: [],
+    projectKeys: preselectedProjectKey ? [preselectedProjectKey] : [],
     createdStartDate: '',
     createdEndDate: '',
     resolvedStartDate: '',
@@ -434,7 +434,7 @@ export const useFilters = (processedStories: ProcessedStory[]) => {
       sprints: [],
       storyPoints: [],
       statuses: [],
-      projectKeys: [],
+      projectKeys: preselectedProjectKey ? [preselectedProjectKey] : [],
       createdStartDate: '',
       createdEndDate: '',
       resolvedStartDate: '',

@@ -5,8 +5,10 @@
 
 export const paths = {
   home: '/',
+  projects: '/',
+  project: (projectKey: string) => `/project/${projectKey}`,
   dashboard: '/dashboard',
-  reports: '/reports',
+  reports: '/reports', 
   settings: '/settings',
   auth: {
     login: '/auth/login',

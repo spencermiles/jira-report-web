@@ -1,7 +1,8 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Upload, FileText, AlertCircle } from 'lucide-react';
+import Link from 'next/link';
+import { Upload, FileText, AlertCircle, ArrowLeft } from 'lucide-react';
 import { 
   Chart as ChartJS,
   CategoryScale,
@@ -27,7 +28,7 @@ ChartJS.register(
 );
 
 // Hooks
-import { useJiraData } from './hooks/useJiraData';
+import { useJiraDataContext } from '@/contexts/jira-data-context';
 import { useFilters } from './hooks/useFilters';
 import { useMetricsCalculations } from './hooks/useMetricsCalculations';
 import { useSorting } from './hooks/useSorting';
@@ -38,11 +39,18 @@ import MetricsTab from './tabs/MetricsTab';
 import IssuesTab from './tabs/IssuesTab';
 import ChartsTab from './tabs/ChartsTab';
 
-const JiraIssueReport = () => {
+// Utils
+import { paths } from '@/lib/paths';
+
+interface JiraIssueReportProps {
+  preselectedProjectKey?: string;
+}
+
+const JiraIssueReport: React.FC<JiraIssueReportProps> = ({ preselectedProjectKey }) => {
   const [activeTab, setActiveTab] = useState<'metrics' | 'issues' | 'charts'>('metrics');
 
   // Data management
-  const { processedStories, loading, error, handleFileUpload } = useJiraData();
+  const { processedStories, loading, error, handleFileUpload } = useJiraDataContext();
 
   // Filters
   const {
@@ -62,7 +70,7 @@ const JiraIssueReport = () => {
     clearAllFilters,
     hasActiveFilters,
     toggleAccordion
-  } = useFilters(processedStories);
+  } = useFilters(processedStories, preselectedProjectKey);
 
   // Sorting
   const { sortConfig, sortedStories, sortStories } = useSorting(filteredStories);
@@ -120,6 +128,21 @@ const JiraIssueReport = () => {
       {/* Main Content */}
       <div className="flex-1 p-6 bg-white">
         <div className="max-w-7xl mx-auto">
+          {/* Navigation breadcrumb when viewing specific project */}
+          {preselectedProjectKey && (
+            <div className="mb-6">
+              <Link 
+                href={paths.projects}
+                className="inline-flex items-center text-sm text-gray-600 hover:text-gray-900 transition-colors"
+              >
+                <ArrowLeft className="h-4 w-4 mr-2" />
+                Back to Projects
+              </Link>
+              <h1 className="text-2xl font-bold text-gray-900 mt-2">
+                {preselectedProjectKey} - Project Analysis
+              </h1>
+            </div>
+          )}
           <div className="mb-8">
             <h1 className="text-3xl font-bold text-gray-900 mb-2">JIRA Issue Report</h1>
             <p className="text-gray-600">Upload your JIRA JSON export to view all issues with cycle time analysis</p>

@@ -37,14 +37,16 @@ const Projects: React.FC = () => {
 
     // Calculate metrics for each project
     const summaries: ProjectSummary[] = Object.entries(projectGroups).map(([projectKey, stories]) => {
-      const resolvedStories = stories.filter(story => story.resolved && story.metrics.cycleTime && story.metrics.leadTime);
+      // Filter separately for cycle time and lead time to align with MetricsTab.tsx
+      const resolvedStoriesWithCycleTime = stories.filter(story => story.resolved && story.metrics.cycleTime);
+      const resolvedStoriesWithLeadTime = stories.filter(story => story.resolved && story.metrics.leadTime);
       
       // Extract cycle times and lead times as arrays
-      const cycleTimeValues = resolvedStories
+      const cycleTimeValues = resolvedStoriesWithCycleTime
         .map(story => story.metrics.cycleTime)
         .filter((time): time is number => time !== null && time !== undefined);
       
-      const leadTimeValues = resolvedStories
+      const leadTimeValues = resolvedStoriesWithLeadTime
         .map(story => story.metrics.leadTime)
         .filter((time): time is number => time !== null && time !== undefined);
       
@@ -52,12 +54,17 @@ const Projects: React.FC = () => {
       const cycleTimeStats = calculateStats(cycleTimeValues);
       const leadTimeStats = calculateStats(leadTimeValues);
 
+      // Count stories that are resolved and have at least some metrics (cycle time or lead time)
+      const resolvedStoriesWithMetrics = stories.filter(story => 
+        story.resolved && (story.metrics.cycleTime || story.metrics.leadTime)
+      );
+
       return {
         projectKey,
         storyCount: stories.length,
         cycleTimeStats,
         leadTimeStats,
-        resolvedStories: resolvedStories.length,
+        resolvedStories: resolvedStoriesWithMetrics.length,
       };
     });
 

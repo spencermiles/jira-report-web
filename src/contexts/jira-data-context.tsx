@@ -142,25 +142,30 @@ export const JiraDataProvider: React.FC<JiraDataProviderProps> = ({ children }) 
         metrics.timestamps.done = new Date(story.resolved);
       }
 
-      // Calculate cycle times
+      // Calculate cycle times (rounded to nearest 0.1 days)
       if (metrics.timestamps.inProgress && metrics.timestamps.done) {
-        metrics.cycleTime = (metrics.timestamps.done.getTime() - metrics.timestamps.inProgress.getTime()) / (1000 * 60 * 60 * 24);
+        const rawCycleTime = (metrics.timestamps.done.getTime() - metrics.timestamps.inProgress.getTime()) / (1000 * 60 * 60 * 24);
+        metrics.cycleTime = Math.round(rawCycleTime * 10) / 10;
       }
 
       if (metrics.timestamps.opened && metrics.timestamps.done) {
-        metrics.leadTime = (metrics.timestamps.done.getTime() - metrics.timestamps.opened.getTime()) / (1000 * 60 * 60 * 24);
+        const rawLeadTime = (metrics.timestamps.done.getTime() - metrics.timestamps.opened.getTime()) / (1000 * 60 * 60 * 24);
+        metrics.leadTime = Math.round(rawLeadTime * 10) / 10;
       }
 
       if (metrics.timestamps.readyForGrooming && metrics.timestamps.readyForDev) {
-        metrics.groomingCycleTime = (metrics.timestamps.readyForDev.getTime() - metrics.timestamps.readyForGrooming.getTime()) / (1000 * 60 * 60 * 24);
+        const rawGroomingCycleTime = (metrics.timestamps.readyForDev.getTime() - metrics.timestamps.readyForGrooming.getTime()) / (1000 * 60 * 60 * 24);
+        metrics.groomingCycleTime = Math.round(rawGroomingCycleTime * 10) / 10;
       }
 
       if (metrics.timestamps.inProgress && metrics.timestamps.inReview) {
-        metrics.devCycleTime = (metrics.timestamps.inReview.getTime() - metrics.timestamps.inProgress.getTime()) / (1000 * 60 * 60 * 24);
+        const rawDevCycleTime = (metrics.timestamps.inReview.getTime() - metrics.timestamps.inProgress.getTime()) / (1000 * 60 * 60 * 24);
+        metrics.devCycleTime = Math.round(rawDevCycleTime * 10) / 10;
       }
 
       if (metrics.timestamps.inQA && metrics.timestamps.done) {
-        metrics.qaCycleTime = (metrics.timestamps.done.getTime() - metrics.timestamps.inQA.getTime()) / (1000 * 60 * 60 * 24);
+        const rawQaCycleTime = (metrics.timestamps.done.getTime() - metrics.timestamps.inQA.getTime()) / (1000 * 60 * 60 * 24);
+        metrics.qaCycleTime = Math.round(rawQaCycleTime * 10) / 10;
       }
 
       return metrics;

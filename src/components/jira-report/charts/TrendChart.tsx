@@ -1,9 +1,11 @@
 import React from 'react';
 import { Line } from 'react-chartjs-2';
 import { ProcessedStory } from '@/types/jira';
+import { TimePeriod } from '@/types';
+import { getTimePeriodKey, formatTimePeriodLabel, getMovingAverageWindow } from '../utils/calculations';
 
 interface TrendData {
-  week: string;
+  period: string;
   medianCycleTime: number;
   movingAverage: number;
   count: number;
@@ -19,6 +21,7 @@ interface TrendChartProps {
   title: string;
   filteredStories: ProcessedStory[];
   metricExtractor: (story: ProcessedStory) => number | null;
+  timePeriod?: TimePeriod;
   height?: number;
   noDataMessage?: string;
   color?: string;
@@ -29,13 +32,14 @@ const TrendChart: React.FC<TrendChartProps> = ({
   title,
   filteredStories,
   metricExtractor,
+  timePeriod = 'weekly',
   height = 400,
   noDataMessage = "No data available",
   color = '#3b82f6',
   movingAverageColor = '#ef4444'
 }) => {
   
-  const getTrendData = (): { weeklyData: TrendData[]; rawData: RawDataPoint[] } => {
+  const getTrendData = (): { periodData: TrendData[]; rawData: RawDataPoint[] } => {
     // Get stories with both resolved date and the specified metric
     const validStories = filteredStories
       .filter(story => {
@@ -50,32 +54,23 @@ const TrendChart: React.FC<TrendChartProps> = ({
       .sort((a, b) => a.resolvedDate.getTime() - b.resolvedDate.getTime());
 
     if (validStories.length === 0) {
-      return { weeklyData: [], rawData: validStories };
+      return { periodData: [], rawData: validStories };
     }
 
-    // Helper function to get week start (Monday)
-    const getWeekStart = (date: Date): string => {
-      const d = new Date(date);
-      const day = d.getDay();
-      const diff = d.getDate() - day + (day === 0 ? -6 : 1); // Adjust for Sunday
-      d.setDate(diff);
-      return d.toISOString().split('T')[0];
-    };
-
-    // Group by week and calculate weekly medians
-    const weeklyGroups: Record<string, number[]> = {};
+    // Group by time period and calculate medians
+    const periodGroups: Record<string, number[]> = {};
     
     validStories.forEach(story => {
-      const weekStart = getWeekStart(story.resolvedDate);
-      if (!weeklyGroups[weekStart]) {
-        weeklyGroups[weekStart] = [];
+      const periodKey = getTimePeriodKey(story.resolvedDate, timePeriod);
+      if (!periodGroups[periodKey]) {
+        periodGroups[periodKey] = [];
       }
-      weeklyGroups[weekStart].push(story.value);
+      periodGroups[periodKey].push(story.value);
     });
 
-    // Calculate weekly medians and moving averages
-    const weeklyData = Object.entries(weeklyGroups)
-      .map(([week, values]) => {
+    // Calculate period medians and moving averages
+    const periodData = Object.entries(periodGroups)
+      .map(([period, values]) => {
         const sorted = [...values].sort((a, b) => a - b);
         const median = sorted.length > 0 ? 
           (sorted.length % 2 === 0 ? 
@@ -83,30 +78,31 @@ const TrendChart: React.FC<TrendChartProps> = ({
             sorted[Math.floor(sorted.length / 2)]) : 0;
         
         return {
-          week,
+          period,
           medianCycleTime: Math.round(median * 10) / 10,
           count: values.length,
           movingAverage: 0 // Will be calculated below
         };
       })
-      .sort((a, b) => a.week.localeCompare(b.week));
+      .sort((a, b) => a.period.localeCompare(b.period));
 
-    // Calculate 4-week moving average
-    weeklyData.forEach((item, index) => {
-      const windowStart = Math.max(0, index - 3);
-      const windowData = weeklyData.slice(windowStart, index + 1);
+    // Calculate moving average based on period type
+    const windowSize = getMovingAverageWindow(timePeriod);
+    periodData.forEach((item, index) => {
+      const windowStart = Math.max(0, index - windowSize + 1);
+      const windowData = periodData.slice(windowStart, index + 1);
       const windowValues = windowData.map(w => w.medianCycleTime);
       const movingMedian = windowValues.length > 0 ? 
         windowValues.reduce((sum, val) => sum + val, 0) / windowValues.length : 0;
       item.movingAverage = Math.round(movingMedian * 10) / 10;
     });
 
-    return { weeklyData, rawData: validStories };
+    return { periodData, rawData: validStories };
   };
 
-  const { weeklyData, rawData } = getTrendData();
+  const { periodData, rawData } = getTrendData();
   
-  if (weeklyData.length === 0) {
+  if (periodData.length === 0) {
     return (
       <div className="bg-white border border-gray-200 rounded-lg p-6">
         <h3 className="text-lg font-semibold text-gray-900 mb-4">{title}</h3>
@@ -117,16 +113,9 @@ const TrendChart: React.FC<TrendChartProps> = ({
     );
   }
 
-  // Format week dates for display
-  const formatWeekLabel = (weekStr: string) => {
-    try {
-      return new Date(weekStr).toLocaleDateString('en-US', { 
-        month: 'short', 
-        day: 'numeric' 
-      });
-    } catch {
-      return weekStr;
-    }
+  // Format period dates for display
+  const formatPeriodLabel = (periodStr: string) => {
+    return formatTimePeriodLabel(periodStr, timePeriod);
   };
 
   // Calculate overall median for reference line
@@ -134,13 +123,19 @@ const TrendChart: React.FC<TrendChartProps> = ({
   const overallMedian = allValues.length > 0 ? 
     allValues.sort((a, b) => a - b)[Math.floor(allValues.length / 2)] : 0;
 
+  const getMovingAverageLabel = () => {
+    const windowSize = getMovingAverageWindow(timePeriod);
+    const periodLabel = timePeriod.charAt(0).toUpperCase() + timePeriod.slice(1);
+    return `${windowSize}-${periodLabel} Moving Median`;
+  };
+
   const chartData = {
-    labels: weeklyData.map(d => formatWeekLabel(d.week)),
+    labels: periodData.map(d => formatPeriodLabel(d.period)),
     datasets: [
       {
         type: 'line' as const,
-        label: 'Weekly Median',
-        data: weeklyData.map(d => d.medianCycleTime),
+        label: `${timePeriod.charAt(0).toUpperCase() + timePeriod.slice(1)} Median`,
+        data: periodData.map(d => d.medianCycleTime),
         borderColor: color,
         backgroundColor: `${color}1a`, // Add transparency
         borderWidth: 2,
@@ -151,8 +146,8 @@ const TrendChart: React.FC<TrendChartProps> = ({
       },
       {
         type: 'line' as const,
-        label: '4-Week Moving Median',
-        data: weeklyData.map(d => d.movingAverage),
+        label: getMovingAverageLabel(),
+        data: periodData.map(d => d.movingAverage),
         borderColor: movingAverageColor,
         backgroundColor: `${movingAverageColor}1a`, // Add transparency
         borderWidth: 3,
@@ -164,7 +159,7 @@ const TrendChart: React.FC<TrendChartProps> = ({
       {
         type: 'line' as const,
         label: 'Overall Median',
-        data: weeklyData.map(() => overallMedian),
+        data: periodData.map(() => overallMedian),
         borderColor: '#6b7280',
         borderWidth: 1,
         borderDash: [5, 5],
@@ -189,8 +184,8 @@ const TrendChart: React.FC<TrendChartProps> = ({
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           afterBody: (context: any) => {
             const dataIndex = context[0]?.dataIndex;
-            if (dataIndex !== undefined && weeklyData[dataIndex]) {
-              return `Stories resolved: ${weeklyData[dataIndex].count}`;
+            if (dataIndex !== undefined && periodData[dataIndex]) {
+              return `Stories resolved: ${periodData[dataIndex].count}`;
             }
             return '';
           }
@@ -207,7 +202,7 @@ const TrendChart: React.FC<TrendChartProps> = ({
         display: true,
         title: {
           display: true,
-          text: 'Week (Monday start)'
+          text: `${timePeriod.charAt(0).toUpperCase() + timePeriod.slice(1)} Period`
         }
       },
       y: {
@@ -233,7 +228,7 @@ const TrendChart: React.FC<TrendChartProps> = ({
         <Line data={chartData} options={options} />
       </div>
       <div className="mt-4 text-sm text-gray-600">
-        Shows weekly median values with 4-week moving average trend line. Based on {rawData.length} resolved stories.
+        Shows {timePeriod} median values with {getMovingAverageWindow(timePeriod)}-{timePeriod} moving average trend line. Based on {rawData.length} resolved stories.
       </div>
     </div>
   );

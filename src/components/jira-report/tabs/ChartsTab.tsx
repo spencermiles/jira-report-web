@@ -1,23 +1,39 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { ProcessedStory } from '@/types/jira';
+import { TimePeriod } from '@/types';
 import TrendChart from '../charts/TrendChart';
 import SimpleHistogram from '../charts/SimpleHistogram';
 import CumulativeLineChart from '../charts/CumulativeLineChart';
+import TimePeriodSelector from '../ui/TimePeriodSelector';
+import { useMetricsCalculations } from '../hooks/useMetricsCalculations';
 
 interface ChartsTabProps {
   filteredStories: ProcessedStory[];
-  createdResolvedData: Array<{ date: string; created: number; resolved: number }>;
 }
 
 const ChartsTab: React.FC<ChartsTabProps> = ({
-  filteredStories,
-  createdResolvedData
+  filteredStories
 }) => {
+  const [timePeriod, setTimePeriod] = useState<TimePeriod>('weekly');
+  
+  // Get chart data with the selected time period
+  const { getCreatedResolvedData } = useMetricsCalculations(filteredStories, timePeriod);
+  const createdResolvedData = getCreatedResolvedData();
+
   return (
     <div>
       <div className="mb-6">
-        <h2 className="text-xl font-semibold text-gray-900 mb-2">Charts & Trends</h2>
-        <p className="text-gray-600">Visual analysis of issue creation and resolution patterns over time</p>
+        <div className="flex justify-between items-start mb-4">
+          <div>
+            <h2 className="text-xl font-semibold text-gray-900 mb-2">Charts & Trends</h2>
+            <p className="text-gray-600">Visual analysis of issue creation and resolution patterns over time</p>
+          </div>
+          <TimePeriodSelector
+            value={timePeriod}
+            onChange={setTimePeriod}
+            className="flex-shrink-0"
+          />
+        </div>
       </div>
 
       {/* Cycle Time Trend Charts */}
@@ -30,6 +46,7 @@ const ChartsTab: React.FC<ChartsTabProps> = ({
             title="Lead Time Trend"
             filteredStories={filteredStories}
             metricExtractor={(story) => story.metrics.leadTime}
+            timePeriod={timePeriod}
             noDataMessage="No lead time data available"
             color="#3b82f6"
             movingAverageColor="#ef4444"
@@ -42,6 +59,7 @@ const ChartsTab: React.FC<ChartsTabProps> = ({
             title="Cycle Time Trend"
             filteredStories={filteredStories}
             metricExtractor={(story) => story.metrics.cycleTime}
+            timePeriod={timePeriod}
             noDataMessage="No cycle time data available"
             color="#10b981"
             movingAverageColor="#f59e0b"
@@ -54,6 +72,7 @@ const ChartsTab: React.FC<ChartsTabProps> = ({
             title="Grooming Cycle Time Trend"
             filteredStories={filteredStories}
             metricExtractor={(story) => story.metrics.groomingCycleTime}
+            timePeriod={timePeriod}
             noDataMessage="No grooming cycle time data available"
             color="#8b5cf6"
             movingAverageColor="#ef4444"
@@ -66,6 +85,7 @@ const ChartsTab: React.FC<ChartsTabProps> = ({
             title="Development Cycle Time Trend"
             filteredStories={filteredStories}
             metricExtractor={(story) => story.metrics.devCycleTime}
+            timePeriod={timePeriod}
             noDataMessage="No development cycle time data available"
             color="#f59e0b"
             movingAverageColor="#ef4444"
@@ -78,6 +98,7 @@ const ChartsTab: React.FC<ChartsTabProps> = ({
             title="QA Cycle Time Trend"
             filteredStories={filteredStories}
             metricExtractor={(story) => story.metrics.qaCycleTime}
+            timePeriod={timePeriod}
             noDataMessage="No QA cycle time data available"
             color="#ef4444"
             movingAverageColor="#6366f1"
@@ -89,11 +110,12 @@ const ChartsTab: React.FC<ChartsTabProps> = ({
       <div className="mb-8">
         <h3 className="text-lg font-semibold text-gray-900 mb-6">Issue Activity</h3>
 
-        {/* Weekly Activity Histogram */}
+        {/* Activity Chart */}
         <div className="mb-8">
           <SimpleHistogram
             data={createdResolvedData}
-            title="Weekly Issues Created vs Resolved"
+            title={`${timePeriod.charAt(0).toUpperCase() + timePeriod.slice(1)} Issues Created vs Resolved`}
+            timePeriod={timePeriod}
             height={400}
           />
         </div>
@@ -102,7 +124,8 @@ const ChartsTab: React.FC<ChartsTabProps> = ({
         <div className="mb-8">
           <CumulativeLineChart
             data={createdResolvedData}
-            title="Cumulative Issues Created vs Resolved Over Time (Weekly)"
+            title={`Cumulative Issues Created vs Resolved Over Time (${timePeriod.charAt(0).toUpperCase() + timePeriod.slice(1)})`}
+            timePeriod={timePeriod}
             height={400}
           />
         </div>

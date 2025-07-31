@@ -29,4 +29,13 @@ export interface PaginatedResponse<T> extends ApiResponse<T[]> {
     total: number;
     totalPages: number;
   };
+}
+
+// Time period types for chart grouping
+export type TimePeriod = 'daily' | 'weekly' | 'biweekly' | 'monthly' | 'quarterly';
+
+export interface TimePeriodOption {
+  value: TimePeriod;
+  label: string;
+  shortLabel: string;
 } 

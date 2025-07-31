@@ -1,4 +1,5 @@
 import { StatsResult } from '@/types/jira';
+import { TimePeriod } from '@/types';
 
 export const calculateStats = (values: (number | null)[]): StatsResult => {
   const validValues = values.filter((v): v is number => v !== null && typeof v === 'number' && !isNaN(v));
@@ -90,5 +91,133 @@ export const formatDate = (dateString?: string): string => {
     });
   } catch {
     return 'Invalid date';
+  }
+};
+
+// Time period grouping utilities
+export const getTimePeriodKey = (date: Date, period: TimePeriod): string => {
+  const d = new Date(date);
+  
+  switch (period) {
+    case 'daily':
+      return d.toISOString().split('T')[0]; // YYYY-MM-DD
+      
+    case 'weekly': {
+      // Get Monday of the week
+      const day = d.getDay();
+      const diff = d.getDate() - day + (day === 0 ? -6 : 1);
+      const monday = new Date(d.setDate(diff));
+      return monday.toISOString().split('T')[0];
+    }
+    
+    case 'biweekly': {
+      // Get Monday of the week, then find which biweek it belongs to
+      const day = d.getDay();
+      const diff = d.getDate() - day + (day === 0 ? -6 : 1);
+      const monday = new Date(d.setDate(diff));
+      
+      // Use year and week number to determine biweek
+      const yearStart = new Date(monday.getFullYear(), 0, 1);
+      const weekNum = Math.ceil((monday.getTime() - yearStart.getTime()) / (7 * 24 * 60 * 60 * 1000));
+      const biweekNum = Math.ceil(weekNum / 2);
+      
+      // Return the Monday of the first week in this biweek period
+      const biweekStart = new Date(yearStart);
+      biweekStart.setDate(yearStart.getDate() + (biweekNum - 1) * 14 - yearStart.getDay() + 1);
+      return biweekStart.toISOString().split('T')[0];
+    }
+    
+    case 'monthly': {
+      // First day of the month
+      return new Date(d.getFullYear(), d.getMonth(), 1).toISOString().split('T')[0];
+    }
+    
+    case 'quarterly': {
+      // First day of the quarter
+      const quarter = Math.floor(d.getMonth() / 3);
+      return new Date(d.getFullYear(), quarter * 3, 1).toISOString().split('T')[0];
+    }
+    
+    default:
+      return d.toISOString().split('T')[0];
+  }
+};
+
+export const formatTimePeriodLabel = (dateStr: string, period: TimePeriod): string => {
+  try {
+    const date = new Date(dateStr);
+    
+    switch (period) {
+      case 'daily':
+        return date.toLocaleDateString('en-US', { 
+          month: 'short', 
+          day: 'numeric' 
+        });
+        
+      case 'weekly': {
+        const weekEnd = new Date(date);
+        weekEnd.setDate(date.getDate() + 6);
+        
+        const startStr = date.toLocaleDateString('en-US', { 
+          month: 'short', 
+          day: 'numeric' 
+        });
+        const endStr = weekEnd.toLocaleDateString('en-US', { 
+          month: 'short', 
+          day: 'numeric' 
+        });
+        
+        return `${startStr} - ${endStr}`;
+      }
+      
+      case 'biweekly': {
+        const biweekEnd = new Date(date);
+        biweekEnd.setDate(date.getDate() + 13);
+        
+        const startStr = date.toLocaleDateString('en-US', { 
+          month: 'short', 
+          day: 'numeric' 
+        });
+        const endStr = biweekEnd.toLocaleDateString('en-US', { 
+          month: 'short', 
+          day: 'numeric' 
+        });
+        
+        return `${startStr} - ${endStr}`;
+      }
+      
+      case 'monthly':
+        return date.toLocaleDateString('en-US', { 
+          year: 'numeric',
+          month: 'short' 
+        });
+        
+      case 'quarterly': {
+        const quarter = Math.floor(date.getMonth() / 3) + 1;
+        return `Q${quarter} ${date.getFullYear()}`;
+      }
+      
+      default:
+        return dateStr;
+    }
+  } catch {
+    return dateStr;
+  }
+};
+
+export const getMovingAverageWindow = (period: TimePeriod): number => {
+  switch (period) {
+    case 'daily':
+      return 7; // 7-day moving average
+    case 'weekly':
+      return 4; // 4-week moving average
+    case 'biweekly':
+      return 3; // 3 biweek moving average
+    case 'monthly':
+      return 3; // 3-month moving average
+    case 'quarterly':
+      return 2; // 2-quarter moving average
+    default:
+      return 4;
   }
 };

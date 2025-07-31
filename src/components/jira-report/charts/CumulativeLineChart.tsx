@@ -1,5 +1,7 @@
 import React from 'react';
 import { Line } from 'react-chartjs-2';
+import { TimePeriod } from '@/types';
+import { formatTimePeriodLabel } from '../utils/calculations';
 
 interface CumulativeData {
   date: string;
@@ -10,12 +12,14 @@ interface CumulativeData {
 interface CumulativeLineChartProps {
   data: CumulativeData[];
   title: string;
+  timePeriod?: TimePeriod;
   height?: number;
 }
 
 const CumulativeLineChart: React.FC<CumulativeLineChartProps> = ({ 
   data, 
   title, 
+  timePeriod = 'weekly',
   height = 300
 }) => {
   if (data.length === 0) {
@@ -43,26 +47,9 @@ const CumulativeLineChart: React.FC<CumulativeLineChartProps> = ({
     return acc;
   }, [] as Array<{ date: string; cumulativeCreated: number; cumulativeResolved: number }>);
 
-  // Format date for display (week range)
+  // Format date for display based on time period
   const formatDateLabel = (dateStr: string) => {
-    try {
-      const weekStart = new Date(dateStr);
-      const weekEnd = new Date(weekStart);
-      weekEnd.setDate(weekStart.getDate() + 6);
-      
-      const startStr = weekStart.toLocaleDateString('en-US', { 
-        month: 'short', 
-        day: 'numeric' 
-      });
-      const endStr = weekEnd.toLocaleDateString('en-US', { 
-        month: 'short', 
-        day: 'numeric' 
-      });
-      
-      return `${startStr} - ${endStr}`;
-    } catch {
-      return dateStr;
-    }
+    return formatTimePeriodLabel(dateStr, timePeriod);
   };
 
   const chartData = {

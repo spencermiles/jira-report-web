@@ -4,41 +4,23 @@ import React, { useMemo } from 'react';
 import Link from 'next/link';
 import { ArrowRight, Upload, FileText } from 'lucide-react';
 import { useJiraDataContext } from '@/contexts/jira-data-context';
-import { ProcessedStory } from '@/types/jira';
+import { ProcessedStory, StatsResult } from '@/types/jira';
 import { paths } from '@/lib/paths';
+import { calculateStats } from '@/components/jira-report/utils/calculations';
+import StatCard from '@/components/jira-report/ui/StatCard';
 
 interface ProjectSummary {
   projectKey: string;
   storyCount: number;
-  medianCycleTime: number | null;
-  meanCycleTime: number | null;
-  medianLeadTime: number | null;
-  meanLeadTime: number | null;
+  cycleTimeStats: StatsResult;
+  leadTimeStats: StatsResult;
   resolvedStories: number;
 }
 
 const Projects: React.FC = () => {
   const { processedStories, loading, error, handleFileUpload } = useJiraDataContext();
 
-  // Helper function to calculate median
-  const calculateMedian = (values: number[]): number | null => {
-    if (values.length === 0) return null;
-    
-    const sorted = [...values].sort((a, b) => a - b);
-    const mid = Math.floor(sorted.length / 2);
-    
-    if (sorted.length % 2 === 0) {
-      return (sorted[mid - 1] + sorted[mid]) / 2;
-    } else {
-      return sorted[mid];
-    }
-  };
 
-  // Helper function to calculate mean
-  const calculateMean = (values: number[]): number | null => {
-    if (values.length === 0) return null;
-    return values.reduce((sum, value) => sum + value, 0) / values.length;
-  };
 
   const projectSummaries = useMemo(() => {
     if (processedStories.length === 0) return [];
@@ -66,19 +48,15 @@ const Projects: React.FC = () => {
         .map(story => story.metrics.leadTime)
         .filter((time): time is number => time !== null && time !== undefined);
       
-      // Calculate both median and mean
-      const medianCycleTime = calculateMedian(cycleTimeValues);
-      const meanCycleTime = calculateMean(cycleTimeValues);
-      const medianLeadTime = calculateMedian(leadTimeValues);
-      const meanLeadTime = calculateMean(leadTimeValues);
+      // Calculate full statistics
+      const cycleTimeStats = calculateStats(cycleTimeValues);
+      const leadTimeStats = calculateStats(leadTimeValues);
 
       return {
         projectKey,
         storyCount: stories.length,
-        medianCycleTime,
-        meanCycleTime,
-        medianLeadTime,
-        meanLeadTime,
+        cycleTimeStats,
+        leadTimeStats,
         resolvedStories: resolvedStories.length,
       };
     });
@@ -87,11 +65,7 @@ const Projects: React.FC = () => {
     return summaries.sort((a, b) => b.storyCount - a.storyCount);
   }, [processedStories]);
 
-  const formatTime = (days: number | null): string => {
-    if (days === null) return 'N/A';
-    if (days < 1) return '< 1 day';
-    return `${Math.round(days)} days`;
-  };
+
 
   if (loading) {
     return (
@@ -213,26 +187,18 @@ const Projects: React.FC = () => {
                   
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {/* Cycle Time */}
-                    <div className="bg-blue-50 rounded-lg p-4">
-                      <h3 className="text-sm font-medium text-blue-700 mb-1">Median Cycle Time</h3>
-                      <p className="text-2xl font-bold text-blue-900">
-                        {formatTime(project.medianCycleTime)}
-                      </p>
-                      <p className="text-xs text-blue-600 mt-1">
-                        Mean: {formatTime(project.meanCycleTime)} • Time from dev start to resolution
-                      </p>
-                    </div>
+                    <StatCard
+                      title="Cycle Time"
+                      stats={project.cycleTimeStats}
+                      unit=" days"
+                    />
 
                     {/* Lead Time */}
-                    <div className="bg-green-50 rounded-lg p-4">
-                      <h3 className="text-sm font-medium text-green-700 mb-1">Median Lead Time</h3>
-                      <p className="text-2xl font-bold text-green-900">
-                        {formatTime(project.medianLeadTime)}
-                      </p>
-                      <p className="text-xs text-green-600 mt-1">
-                        Mean: {formatTime(project.meanLeadTime)} • Time from creation to resolution
-                      </p>
-                    </div>
+                    <StatCard
+                      title="Lead Time" 
+                      stats={project.leadTimeStats}
+                      unit=" days"
+                    />
                   </div>
                 </div>
 

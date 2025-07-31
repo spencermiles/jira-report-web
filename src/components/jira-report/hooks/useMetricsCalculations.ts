@@ -1,8 +1,9 @@
 import { useMemo } from 'react';
 import { ProcessedStory } from '@/types/jira';
-import { calculateStats, calculateCorrelation } from '../utils/calculations';
+import { TimePeriod } from '@/types';
+import { calculateStats, calculateCorrelation, getTimePeriodKey } from '../utils/calculations';
 
-export const useMetricsCalculations = (filteredStories: ProcessedStory[]) => {
+export const useMetricsCalculations = (filteredStories: ProcessedStory[], timePeriod: TimePeriod = 'weekly') => {
   
   const calculateStoryPointsCorrelation = useMemo(() => {
     return () => {
@@ -177,53 +178,44 @@ export const useMetricsCalculations = (filteredStories: ProcessedStory[]) => {
 
   const getCreatedResolvedData = useMemo(() => {
     return () => {
-      // Helper function to get the start of the week (Monday) for a given date
-      const getWeekStart = (date: Date): string => {
-        const d = new Date(date);
-        const day = d.getDay();
-        const diff = d.getDate() - day + (day === 0 ? -6 : 1); // Adjust when day is Sunday
-        const weekStart = new Date(d.setDate(diff));
-        return weekStart.toISOString().split('T')[0];
-      };
-
-      const weeklyData: Record<string, { created: number; resolved: number }> = {};
+      const periodData: Record<string, { created: number; resolved: number }> = {};
       
-      // Initialize with all weeks in the range
-      const allWeeks = new Set<string>();
+      // Initialize with all periods in the range
+      const allPeriods = new Set<string>();
       
       // Process created dates
       filteredStories.forEach(story => {
         if (story.created) {
-          const weekKey = getWeekStart(new Date(story.created));
-          allWeeks.add(weekKey);
-          if (!weeklyData[weekKey]) {
-            weeklyData[weekKey] = { created: 0, resolved: 0 };
+          const periodKey = getTimePeriodKey(new Date(story.created), timePeriod);
+          allPeriods.add(periodKey);
+          if (!periodData[periodKey]) {
+            periodData[periodKey] = { created: 0, resolved: 0 };
           }
-          weeklyData[weekKey].created++;
+          periodData[periodKey].created++;
         }
       });
 
       // Process resolved dates
       filteredStories.forEach(story => {
         if (story.resolved) {
-          const weekKey = getWeekStart(new Date(story.resolved));
-          allWeeks.add(weekKey);
-          if (!weeklyData[weekKey]) {
-            weeklyData[weekKey] = { created: 0, resolved: 0 };
+          const periodKey = getTimePeriodKey(new Date(story.resolved), timePeriod);
+          allPeriods.add(periodKey);
+          if (!periodData[periodKey]) {
+            periodData[periodKey] = { created: 0, resolved: 0 };
           }
-          weeklyData[weekKey].resolved++;
+          periodData[periodKey].resolved++;
         }
       });
 
-      // Fill in missing weeks with zeros
-      allWeeks.forEach(week => {
-        if (!weeklyData[week]) {
-          weeklyData[week] = { created: 0, resolved: 0 };
+      // Fill in missing periods with zeros
+      allPeriods.forEach(period => {
+        if (!periodData[period]) {
+          periodData[period] = { created: 0, resolved: 0 };
         }
       });
 
       // Convert to array and sort by date
-      const dataArray = Object.entries(weeklyData)
+      const dataArray = Object.entries(periodData)
         .map(([date, data]) => ({
           date,
           created: data.created,
@@ -233,7 +225,7 @@ export const useMetricsCalculations = (filteredStories: ProcessedStory[]) => {
 
       return dataArray;
     };
-  }, [filteredStories]);
+  }, [filteredStories, timePeriod]);
 
   const getStageVariability = useMemo(() => {
     return () => {

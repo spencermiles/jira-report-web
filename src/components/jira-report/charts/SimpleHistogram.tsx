@@ -1,5 +1,7 @@
 import React from 'react';
-import { Bar } from 'react-chartjs-2';
+import { Line } from 'react-chartjs-2';
+import { TimePeriod } from '@/types';
+import { formatTimePeriodLabel } from '../utils/calculations';
 
 interface HistogramData {
   date: string;
@@ -10,12 +12,14 @@ interface HistogramData {
 interface SimpleHistogramProps {
   data: HistogramData[];
   title: string;
+  timePeriod?: TimePeriod;
   height?: number;
 }
 
 const SimpleHistogram: React.FC<SimpleHistogramProps> = ({ 
   data, 
   title, 
+  timePeriod = 'weekly',
   height = 300
 }) => {
   if (data.length === 0) {
@@ -29,26 +33,9 @@ const SimpleHistogram: React.FC<SimpleHistogramProps> = ({
     );
   }
 
-  // Format date for display (week range)
+  // Format date for display based on time period
   const formatDateLabel = (dateStr: string) => {
-    try {
-      const weekStart = new Date(dateStr);
-      const weekEnd = new Date(weekStart);
-      weekEnd.setDate(weekStart.getDate() + 6);
-      
-      const startStr = weekStart.toLocaleDateString('en-US', { 
-        month: 'short', 
-        day: 'numeric' 
-      });
-      const endStr = weekEnd.toLocaleDateString('en-US', { 
-        month: 'short', 
-        day: 'numeric' 
-      });
-      
-      return `${startStr} - ${endStr}`;
-    } catch {
-      return dateStr;
-    }
+    return formatTimePeriodLabel(dateStr, timePeriod);
   };
 
   const chartData = {
@@ -57,16 +44,24 @@ const SimpleHistogram: React.FC<SimpleHistogramProps> = ({
       {
         label: 'Issues Created',
         data: data.map(d => d.created),
-        backgroundColor: '#3b82f6',
         borderColor: '#3b82f6',
-        borderWidth: 1,
+        backgroundColor: 'rgba(59, 130, 246, 0.1)',
+        borderWidth: 2,
+        fill: false,
+        tension: 0.1,
+        pointRadius: 4,
+        pointHoverRadius: 6,
       },
       {
         label: 'Issues Resolved',
         data: data.map(d => d.resolved),
-        backgroundColor: '#10b981',
         borderColor: '#10b981',
-        borderWidth: 1,
+        backgroundColor: 'rgba(16, 185, 129, 0.1)',
+        borderWidth: 2,
+        fill: false,
+        tension: 0.1,
+        pointRadius: 4,
+        pointHoverRadius: 6,
       },
     ],
   };
@@ -112,7 +107,7 @@ const SimpleHistogram: React.FC<SimpleHistogramProps> = ({
     <div className="bg-white border border-gray-200 rounded-lg p-6">
       <h3 className="text-lg font-semibold text-gray-900 mb-4">{title}</h3>
       <div style={{ height: `${height}px` }}>
-        <Bar data={chartData} options={options} />
+        <Line data={chartData} options={options} />
       </div>
     </div>
   );

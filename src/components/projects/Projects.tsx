@@ -8,6 +8,7 @@ import { ProcessedStory, StatsResult } from '@/types/jira';
 import { paths } from '@/lib/paths';
 import { calculateStats } from '@/components/jira-report/utils/calculations';
 import StatCard from '@/components/jira-report/ui/StatCard';
+import CycleTimeCard from '@/components/jira-report/ui/CycleTimeCard';
 
 interface ProjectSummary {
   projectKey: string;
@@ -194,10 +195,12 @@ const Projects: React.FC = () => {
                   
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {/* Cycle Time */}
-                    <StatCard
-                      title="Cycle Time"
-                      stats={project.cycleTimeStats}
-                      unit=" days"
+                    <CycleTimeCard
+                      value={project.cycleTimeStats.median}
+                      details={[
+                        { label: "Median", value: `${project.cycleTimeStats.median} days` },
+                        { label: "Count", value: project.cycleTimeStats.count }
+                      ]}
                     />
 
                     {/* Lead Time */}

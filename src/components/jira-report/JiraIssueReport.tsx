@@ -63,6 +63,8 @@ const JiraIssueReport: React.FC<JiraIssueReportProps> = ({ preselectedProjectKey
     toggleStoryPoint,
     toggleStatus,
     toggleProjectKey,
+    selectAllIssueTypes,
+    deselectAllIssueTypes,
     setCreatedStartDate,
     setCreatedEndDate,
     setResolvedStartDate,
@@ -111,6 +113,8 @@ const JiraIssueReport: React.FC<JiraIssueReportProps> = ({ preselectedProjectKey
           toggleStoryPoint={toggleStoryPoint}
           toggleStatus={toggleStatus}
           toggleProjectKey={toggleProjectKey}
+          selectAllIssueTypes={selectAllIssueTypes}
+          deselectAllIssueTypes={deselectAllIssueTypes}
           setCreatedStartDate={setCreatedStartDate}
           setCreatedEndDate={setCreatedEndDate}
           setResolvedStartDate={setResolvedStartDate}

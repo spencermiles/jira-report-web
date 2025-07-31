@@ -84,6 +84,8 @@ interface FilterSidebarProps {
   toggleStoryPoint: (points: number | 'none') => void;
   toggleStatus: (status: string) => void;
   toggleProjectKey: (projectKey: string) => void;
+  selectAllIssueTypes: () => void;
+  deselectAllIssueTypes: () => void;
   setCreatedStartDate: (date: string) => void;
   setCreatedEndDate: (date: string) => void;
   setResolvedStartDate: (date: string) => void;
@@ -106,6 +108,8 @@ const FilterSidebar: React.FC<FilterSidebarProps> = ({
   toggleStoryPoint,
   toggleStatus,
   toggleProjectKey,
+  selectAllIssueTypes,
+  deselectAllIssueTypes,
   setCreatedStartDate,
   setCreatedEndDate,
   setResolvedStartDate,
@@ -232,6 +236,23 @@ const FilterSidebar: React.FC<FilterSidebarProps> = ({
         />
         {accordionStates.issueType && (
           <div className="mt-3 space-y-2">
+            {/* Select All / Deselect All buttons */}
+            <div className="flex space-x-2 mb-3">
+              <button
+                onClick={selectAllIssueTypes}
+                className="text-xs text-blue-600 hover:text-blue-800 underline font-medium"
+              >
+                Select All
+              </button>
+              <span className="text-xs text-gray-400">|</span>
+              <button
+                onClick={deselectAllIssueTypes}
+                className="text-xs text-gray-600 hover:text-gray-800 underline font-medium"
+              >
+                Deselect All
+              </button>
+            </div>
+            
             {issueTypeCounts.map(({ value, count }) => (
               <label key={value} className="flex items-center space-x-2 cursor-pointer hover:bg-gray-100 p-1 rounded">
                 <input

@@ -4,6 +4,7 @@ import { calculateStats } from '../utils/calculations';
 import StatCard from '../ui/StatCard';
 import CorrelationCard from '../ui/CorrelationCard';
 import FlowMetricCard from '../ui/FlowMetricCard';
+import CycleTimeCard from '../ui/CycleTimeCard';
 
 interface MetricsTabProps {
   filteredStories: ProcessedStory[];
@@ -64,14 +65,19 @@ const MetricsTab: React.FC<MetricsTabProps> = ({
       <div className="mb-8">
         <h3 className="text-lg font-semibold text-gray-900 mb-4">Cycle Time Metrics</h3>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <CycleTimeCard
+            value={cycleTimeStats.median}
+            details={[
+              { label: "Median", value: `${cycleTimeStats.median} days` },
+              { label: "Mean", value: `${cycleTimeStats.mean} days` },
+              { label: "Min", value: `${cycleTimeStats.min} days` },
+              { label: "Max", value: `${cycleTimeStats.max} days` },
+              { label: "Count", value: cycleTimeStats.count }
+            ]}
+          />
           <StatCard
             title="Lead Time"
             stats={leadTimeStats}
-            unit=" days"
-          />
-          <StatCard
-            title="Cycle Time"
-            stats={cycleTimeStats}
             unit=" days"
           />
           <StatCard

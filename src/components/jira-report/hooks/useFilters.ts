@@ -29,8 +29,11 @@ interface FilterCount {
 }
 
 export const useFilters = (processedStories: ProcessedStory[], preselectedProjectKey?: string) => {
+  // Initialize with all issue types selected
+  const allIssueTypes = [...new Set(processedStories.map(story => story.issue_type))].sort();
+  
   const [filters, setFilters] = useState<FilterState>({
-    issueTypes: ['Story'],
+    issueTypes: allIssueTypes,
     sprints: [],
     storyPoints: [],
     statuses: ['resolved'],
@@ -400,6 +403,21 @@ export const useFilters = (processedStories: ProcessedStory[], preselectedProjec
     }));
   };
 
+  const selectAllIssueTypes = () => {
+    const { issueTypes } = getFilterOptions();
+    setFilters(prev => ({
+      ...prev,
+      issueTypes: issueTypes
+    }));
+  };
+
+  const deselectAllIssueTypes = () => {
+    setFilters(prev => ({
+      ...prev,
+      issueTypes: []
+    }));
+  };
+
   const setCreatedStartDate = (date: string) => {
     setFilters(prev => ({
       ...prev,
@@ -429,8 +447,9 @@ export const useFilters = (processedStories: ProcessedStory[], preselectedProjec
   };
 
   const clearAllFilters = () => {
+    const { issueTypes } = getFilterOptions();
     setFilters({
-      issueTypes: [],
+      issueTypes: issueTypes, // Reset to all issue types instead of empty
       sprints: [],
       storyPoints: [],
       statuses: [],
@@ -470,6 +489,8 @@ export const useFilters = (processedStories: ProcessedStory[], preselectedProjec
     toggleStoryPoint,
     toggleStatus,
     toggleProjectKey,
+    selectAllIssueTypes,
+    deselectAllIssueTypes,
     setCreatedStartDate,
     setCreatedEndDate,
     setResolvedStartDate,

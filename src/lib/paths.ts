@@ -6,7 +6,12 @@
 export const paths = {
   home: '/',
   projects: '/',
-  project: (projectKey: string) => `/project/${projectKey}`,
+  project: (projectKey: string) => {
+    // Ensure proper URL encoding for project keys
+    const encodedKey = encodeURIComponent(projectKey);
+    console.log('Creating project path:', { projectKey, encodedKey, path: `/project/${encodedKey}` });
+    return `/project/${encodedKey}`;
+  },
   dashboard: '/dashboard',
   reports: '/reports', 
   settings: '/settings',

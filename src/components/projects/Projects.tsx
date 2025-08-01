@@ -175,6 +175,7 @@ const Projects: React.FC = () => {
               key={project.projectKey}
               href={paths.project(project.projectKey)}
               className="block bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow p-6 border border-gray-200 hover:border-gray-300"
+              onClick={() => console.log('Navigating to project:', project.projectKey, 'URL:', paths.project(project.projectKey))}
             >
               <div className="flex items-center justify-between">
                 <div className="flex-1">

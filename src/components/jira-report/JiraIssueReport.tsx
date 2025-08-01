@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import Link from 'next/link';
-import { Upload, FileText, AlertCircle, ArrowLeft } from 'lucide-react';
+import { FileText, AlertCircle, ArrowLeft } from 'lucide-react';
 import { 
   Chart as ChartJS,
   CategoryScale,
@@ -50,7 +50,7 @@ const JiraIssueReport: React.FC<JiraIssueReportProps> = ({ preselectedProjectKey
   const [activeTab, setActiveTab] = useState<'metrics' | 'issues' | 'charts'>('metrics');
 
   // Data management
-  const { processedStories, loading, error, handleFileUpload } = useJiraDataContext();
+  const { processedStories, loading, error } = useJiraDataContext();
 
   // Filters
   const {
@@ -147,31 +147,9 @@ const JiraIssueReport: React.FC<JiraIssueReportProps> = ({ preselectedProjectKey
           )}
           <div className="mb-8">
             <h1 className="text-3xl font-bold text-gray-900 mb-2">JIRA Issue Report</h1>
-            <p className="text-gray-600">Upload your JIRA JSON export to view all issues with cycle time analysis</p>
+            <p className="text-gray-600">Analyze your JIRA issues with cycle time analysis and performance metrics</p>
           </div>
 
-          {/* File Upload */}
-          <div className="mb-6">
-            <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center hover:border-gray-400 transition-colors">
-              <Upload className="mx-auto h-12 w-12 text-gray-400 mb-4" />
-              <div className="mb-4">
-                <label htmlFor="file-upload" className="cursor-pointer">
-                  <span className="text-lg font-medium text-gray-900">Upload JIRA JSON Export</span>
-                  <input
-                    id="file-upload"
-                    name="file-upload"
-                    type="file"
-                    accept=".json"
-                    className="sr-only"
-                    onChange={handleFileUpload}
-                  />
-                </label>
-              </div>
-              <p className="text-sm text-gray-500">
-                Select the JSON file exported from JIRA. Supports issue tracking with cycle time analysis.
-              </p>
-            </div>
-          </div>
 
           {/* Loading State */}
           {loading && (

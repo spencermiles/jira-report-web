@@ -1,6 +1,6 @@
 'use client';
 
-import React, { createContext, useContext, useState, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { JiraIssue, ProcessedStory, StoryMetrics } from '@/types/jira';
 
 // localStorage utilities
@@ -43,6 +43,7 @@ interface JiraDataContextType {
   processedStories: ProcessedStory[];
   loading: boolean;
   error: string | null;
+  isHydrated: boolean;
   handleFileUpload: (event: React.ChangeEvent<HTMLInputElement>) => void;
   clearData: () => void;
 }
@@ -62,10 +63,18 @@ interface JiraDataProviderProps {
 }
 
 export const JiraDataProvider: React.FC<JiraDataProviderProps> = ({ children }) => {
-  // Initialize state from localStorage if available
-  const [processedStories, setProcessedStories] = useState<ProcessedStory[]>(loadFromStorage);
+  // Initialize with empty state to avoid hydration mismatch
+  const [processedStories, setProcessedStories] = useState<ProcessedStory[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isHydrated, setIsHydrated] = useState(false);
+
+  // Load from localStorage after hydration
+  useEffect(() => {
+    const stories = loadFromStorage();
+    setProcessedStories(stories);
+    setIsHydrated(true);
+  }, []);
 
   const calculateCycleTimes = (story: JiraIssue): StoryMetrics => {
     // Status constants - each status can have multiple possible values (lowercase for case insensitive matching)
@@ -305,6 +314,7 @@ export const JiraDataProvider: React.FC<JiraDataProviderProps> = ({ children }) 
     processedStories,
     loading,
     error,
+    isHydrated,
     handleFileUpload,
     clearData
   };

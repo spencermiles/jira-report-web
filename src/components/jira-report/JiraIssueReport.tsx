@@ -50,7 +50,7 @@ const JiraIssueReport: React.FC<JiraIssueReportProps> = ({ preselectedProjectKey
   const [activeTab, setActiveTab] = useState<'metrics' | 'issues' | 'charts'>('metrics');
 
   // Data management
-  const { processedStories, loading, error } = useJiraDataContext();
+  const { processedStories, loading, error, isHydrated } = useJiraDataContext();
 
   // Filters
   const {
@@ -102,8 +102,8 @@ const JiraIssueReport: React.FC<JiraIssueReportProps> = ({ preselectedProjectKey
 
   return (
     <div className="flex min-h-screen bg-white">
-      {/* Filter Sidebar - only show when there are stories */}
-      {processedStories.length > 0 && (
+      {/* Filter Sidebar - only show when there are stories and hydrated */}
+      {processedStories.length > 0 && isHydrated && (
         <FilterSidebar
           filters={filters}
           accordionStates={accordionStates}
@@ -152,10 +152,10 @@ const JiraIssueReport: React.FC<JiraIssueReportProps> = ({ preselectedProjectKey
 
 
           {/* Loading State */}
-          {loading && (
+          {(loading || !isHydrated) && (
             <div className="text-center py-8">
               <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-              <p className="mt-2 text-gray-600">Processing JIRA data...</p>
+              <p className="mt-2 text-gray-600">{loading ? 'Processing JIRA data...' : 'Loading...'}</p>
             </div>
           )}
 
@@ -170,7 +170,7 @@ const JiraIssueReport: React.FC<JiraIssueReportProps> = ({ preselectedProjectKey
           )}
 
           {/* Tab Navigation and Content */}
-          {processedStories.length > 0 && (
+          {processedStories.length > 0 && isHydrated && (
             <div>
               {/* Tab Navigation */}
               <div className="border-b border-gray-200 mb-6">
@@ -241,7 +241,7 @@ const JiraIssueReport: React.FC<JiraIssueReportProps> = ({ preselectedProjectKey
             </div>
           )}
 
-          {processedStories.length === 0 && !loading && !error && (
+          {processedStories.length === 0 && !loading && !error && isHydrated && (
             <div className="text-center py-8 text-gray-500">
               <FileText className="mx-auto h-12 w-12 text-gray-300 mb-4" />
               <p>No issues found in the uploaded file.</p>

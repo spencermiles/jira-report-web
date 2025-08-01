@@ -3,6 +3,42 @@
 import React, { createContext, useContext, useState, ReactNode } from 'react';
 import { JiraIssue, ProcessedStory, StoryMetrics } from '@/types/jira';
 
+// localStorage utilities
+const STORAGE_KEY = 'jira-processed-stories';
+
+const saveToStorage = (stories: ProcessedStory[]) => {
+  if (typeof window !== 'undefined') {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(stories));
+    } catch (error) {
+      console.error('Error saving stories to localStorage:', error);
+    }
+  }
+};
+
+const loadFromStorage = (): ProcessedStory[] => {
+  if (typeof window !== 'undefined') {
+    try {
+      const stored = localStorage.getItem(STORAGE_KEY);
+      return stored ? JSON.parse(stored) : [];
+    } catch (error) {
+      console.error('Error loading stories from localStorage:', error);
+      return [];
+    }
+  }
+  return [];
+};
+
+const clearStorage = () => {
+  if (typeof window !== 'undefined') {
+    try {
+      localStorage.removeItem(STORAGE_KEY);
+    } catch (error) {
+      console.error('Error clearing stories from localStorage:', error);
+    }
+  }
+};
+
 interface JiraDataContextType {
   processedStories: ProcessedStory[];
   loading: boolean;
@@ -26,7 +62,8 @@ interface JiraDataProviderProps {
 }
 
 export const JiraDataProvider: React.FC<JiraDataProviderProps> = ({ children }) => {
-  const [processedStories, setProcessedStories] = useState<ProcessedStory[]>([]);
+  // Initialize state from localStorage if available
+  const [processedStories, setProcessedStories] = useState<ProcessedStory[]>(loadFromStorage);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -247,6 +284,7 @@ export const JiraDataProvider: React.FC<JiraDataProviderProps> = ({ children }) 
       }
       
       setProcessedStories(stories);
+      saveToStorage(stories);
       
     } catch (err) {
       console.error('File processing error:', err);
@@ -260,6 +298,7 @@ export const JiraDataProvider: React.FC<JiraDataProviderProps> = ({ children }) 
   const clearData = () => {
     setProcessedStories([]);
     setError(null);
+    clearStorage();
   };
 
   const value: JiraDataContextType = {

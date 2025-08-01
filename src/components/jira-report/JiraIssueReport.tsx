@@ -48,6 +48,11 @@ interface JiraIssueReportProps {
 
 const JiraIssueReport: React.FC<JiraIssueReportProps> = ({ preselectedProjectKey }) => {
   const [activeTab, setActiveTab] = useState<'metrics' | 'issues' | 'charts'>('metrics');
+  
+  // Debug logging
+  React.useEffect(() => {
+    console.log('JiraIssueReport rendered with preselectedProjectKey:', preselectedProjectKey);
+  }, [preselectedProjectKey]);
 
   // Data management
   const { processedStories, loading, error, isHydrated } = useJiraDataContext();
@@ -145,10 +150,12 @@ const JiraIssueReport: React.FC<JiraIssueReportProps> = ({ preselectedProjectKey
               </h1>
             </div>
           )}
-          <div className="mb-8">
-            <h1 className="text-3xl font-bold text-gray-900 mb-2">JIRA Issue Report</h1>
-            <p className="text-gray-600">Analyze your JIRA issues with cycle time analysis and performance metrics</p>
-          </div>
+          {!preselectedProjectKey && (
+            <div className="mb-8">
+              <h1 className="text-3xl font-bold text-gray-900 mb-2">JIRA Issue Report</h1>
+              <p className="text-gray-600">Analyze your JIRA issues with cycle time analysis and performance metrics</p>
+            </div>
+          )}
 
 
           {/* Loading State */}

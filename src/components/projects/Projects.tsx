@@ -1,7 +1,6 @@
 'use client';
 
 import React, { useMemo } from 'react';
-import Link from 'next/link';
 import { ArrowRight, Upload, FileText } from 'lucide-react';
 import { useJiraDataContext } from '@/contexts/jira-data-context';
 import { ProcessedStory, StatsResult } from '@/types/jira';
@@ -172,7 +171,7 @@ const Projects: React.FC = () => {
         {/* Projects Grid */}
         <div className="grid gap-6">
           {projectSummaries.map((project) => (
-            <Link
+            <a
               key={project.projectKey}
               href={paths.project(project.projectKey)}
               className="block bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow p-6 border border-gray-200 hover:border-gray-300"
@@ -216,7 +215,7 @@ const Projects: React.FC = () => {
                   <ArrowRight className="h-6 w-6" />
                 </div>
               </div>
-            </Link>
+            </a>
           ))}
         </div>
 

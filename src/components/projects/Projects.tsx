@@ -8,6 +8,8 @@ import { paths } from '@/lib/paths';
 import { calculateStats } from '@/components/jira-report/utils/calculations';
 import StatCard from '@/components/jira-report/ui/StatCard';
 import CycleTimeCard from '@/components/jira-report/ui/CycleTimeCard';
+import { debugLog } from '@/lib/debug';
+import { DebugPanel } from '@/components/DebugPanel';
 
 interface ProjectSummary {
   projectKey: string;
@@ -19,6 +21,15 @@ interface ProjectSummary {
 
 const Projects: React.FC = () => {
   const { processedStories, loading, error, isHydrated, handleFileUpload } = useJiraDataContext();
+  
+  React.useEffect(() => {
+    debugLog('Projects component rendered', { 
+      storiesCount: processedStories.length, 
+      loading, 
+      error, 
+      isHydrated 
+    });
+  }, [processedStories.length, loading, error, isHydrated]);
 
 
 
@@ -175,7 +186,10 @@ const Projects: React.FC = () => {
               key={project.projectKey}
               href={paths.project(project.projectKey)}
               className="block bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow p-6 border border-gray-200 hover:border-gray-300"
-              onClick={() => console.log('Navigating to project:', project.projectKey, 'URL:', paths.project(project.projectKey))}
+              onClick={() => debugLog('Link clicked - navigating to project', { 
+                projectKey: project.projectKey, 
+                url: paths.project(project.projectKey) 
+              })}
             >
               <div className="flex items-center justify-between">
                 <div className="flex-1">
@@ -226,6 +240,7 @@ const Projects: React.FC = () => {
           </div>
         )}
       </div>
+      <DebugPanel />
     </div>
   );
 };

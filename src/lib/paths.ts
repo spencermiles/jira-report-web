@@ -3,14 +3,17 @@
  * Use these constants when constructing URLs/routes
  */
 
+import { debugLog } from './debug';
+
 export const paths = {
   home: '/',
   projects: '/',
   project: (projectKey: string) => {
     // Ensure proper URL encoding for project keys
     const encodedKey = encodeURIComponent(projectKey);
-    console.log('Creating project path:', { projectKey, encodedKey, path: `/project/${encodedKey}` });
-    return `/project/${encodedKey}`;
+    const path = `/project/${encodedKey}`;
+    debugLog('Creating project path', { projectKey, encodedKey, path });
+    return path;
   },
   dashboard: '/dashboard',
   reports: '/reports', 

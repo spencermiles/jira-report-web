@@ -41,6 +41,8 @@ import ChartsTab from './tabs/ChartsTab';
 
 // Utils
 import { paths } from '@/lib/paths';
+import { debugLog } from '@/lib/debug';
+import { DebugPanel } from '@/components/DebugPanel';
 
 interface JiraIssueReportProps {
   preselectedProjectKey?: string;
@@ -48,14 +50,20 @@ interface JiraIssueReportProps {
 
 const JiraIssueReport: React.FC<JiraIssueReportProps> = ({ preselectedProjectKey }) => {
   const [activeTab, setActiveTab] = useState<'metrics' | 'issues' | 'charts'>('metrics');
-  
-  // Debug logging
-  React.useEffect(() => {
-    console.log('JiraIssueReport rendered with preselectedProjectKey:', preselectedProjectKey);
-  }, [preselectedProjectKey]);
 
   // Data management
   const { processedStories, loading, error, isHydrated } = useJiraDataContext();
+  
+  // Debug logging
+  React.useEffect(() => {
+    debugLog('JiraIssueReport rendered', { 
+      preselectedProjectKey, 
+      storiesCount: processedStories.length,
+      loading,
+      error,
+      isHydrated
+    });
+  }, [preselectedProjectKey, processedStories.length, loading, error, isHydrated]);
 
   // Filters
   const {
@@ -256,6 +264,7 @@ const JiraIssueReport: React.FC<JiraIssueReportProps> = ({ preselectedProjectKey
           )}
         </div>
       </div>
+      <DebugPanel />
     </div>
   );
 };

@@ -277,6 +277,7 @@ export const JiraDataProvider: React.FC<JiraDataProviderProps> = ({ children }) 
             summary: issue.summary || 'No summary',
             issue_type: issue.issue_type || 'Unknown',
             project_key: issue.project_key || 'Unknown',
+            priority: issue.priority || undefined,
             sprint: sprintName,
             created: issue.created || '',
             resolved: issue.resolved || undefined,

@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { ProcessedStory } from '@/types/jira';
+import { ProcessedStory, DefectResolutionStats } from '@/types/jira';
 import { TimePeriod } from '@/types';
 import { calculateStats, calculateCorrelation, getTimePeriodKey } from '../utils/calculations';
 
@@ -248,6 +248,73 @@ export const useMetricsCalculations = (filteredStories: ProcessedStory[], timePe
     };
   }, [filteredStories]);
 
+  const calculateDefectResolutionTime = useMemo(() => {
+    return () => {
+      // Common defect/bug issue types (case-insensitive)
+      const defectTypes = ['bug', 'defect', 'issue', 'incident'];
+      
+      // Filter for resolved defects only
+      const resolvedDefects = filteredStories.filter(story => 
+        story.resolved && 
+        defectTypes.some(type => story.issue_type.toLowerCase().includes(type.toLowerCase()))
+      );
+
+      if (resolvedDefects.length === 0) {
+        return [];
+      }
+
+      // Group by priority
+      const priorityGroups: Record<string, ProcessedStory[]> = {};
+      
+      resolvedDefects.forEach(defect => {
+        const priority = defect.priority || 'Unassigned';
+        if (!priorityGroups[priority]) {
+          priorityGroups[priority] = [];
+        }
+        priorityGroups[priority].push(defect);
+      });
+
+      // Calculate resolution time for each priority
+      const defectStats: DefectResolutionStats[] = Object.entries(priorityGroups)
+        .map(([priority, defects]) => {
+          // Calculate resolution times in days
+          const resolutionTimes = defects.map(defect => {
+            const createdDate = new Date(defect.created);
+            const resolvedDate = new Date(defect.resolved!);
+            const diffInDays = (resolvedDate.getTime() - createdDate.getTime()) / (1000 * 60 * 60 * 24);
+            return Math.round(diffInDays * 10) / 10; // Round to 1 decimal place
+          });
+
+          const stats = calculateStats(resolutionTimes);
+
+          return {
+            priority,
+            count: defects.length,
+            stats,
+            resolutionTimes
+          };
+        })
+        .sort((a, b) => {
+          // Sort by priority: P1, P2, P3, etc., then others alphabetically
+          const aPriority = a.priority.toLowerCase();
+          const bPriority = b.priority.toLowerCase();
+          
+          const aIsP = aPriority.match(/^p(\d+)$/);
+          const bIsP = bPriority.match(/^p(\d+)$/);
+          
+          if (aIsP && bIsP) {
+            return parseInt(aIsP[1]) - parseInt(bIsP[1]);
+          }
+          if (aIsP && !bIsP) return -1;
+          if (!aIsP && bIsP) return 1;
+          
+          return aPriority.localeCompare(bPriority);
+        });
+
+      return defectStats;
+    };
+  }, [filteredStories]);
+
   return {
     calculateStoryPointsCorrelation,
     calculateQAChurnCorrelation,
@@ -256,6 +323,7 @@ export const useMetricsCalculations = (filteredStories: ProcessedStory[], timePe
     calculateStageSkips,
     calculateBlockedTimeAnalysis,
     getCreatedResolvedData,
-    getStageVariability
+    getStageVariability,
+    calculateDefectResolutionTime
   };
 };

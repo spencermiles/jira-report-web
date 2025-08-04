@@ -86,7 +86,8 @@ const JiraIssueReport: React.FC<JiraIssueReportProps> = ({ preselectedProjectKey
     calculateFirstTimeThrough,
     calculateStageSkips,
     calculateBlockedTimeAnalysis,
-    getStageVariability
+    getStageVariability,
+    calculateDefectResolutionTime
   } = useMetricsCalculations(filteredStories);
 
   // Calculate metrics for tabs
@@ -97,6 +98,7 @@ const JiraIssueReport: React.FC<JiraIssueReportProps> = ({ preselectedProjectKey
   const stageSkips = calculateStageSkips();
   const blockedTimeAnalysis = calculateBlockedTimeAnalysis();
   const stageVariability = getStageVariability();
+  const defectResolutionStats = calculateDefectResolutionTime();
 
   // Filter counts for sidebar
   const filterCounts = getFilterCounts();
@@ -222,6 +224,7 @@ const JiraIssueReport: React.FC<JiraIssueReportProps> = ({ preselectedProjectKey
                   stageSkips={stageSkips}
                   blockedTimeAnalysis={blockedTimeAnalysis}
                   stageVariability={stageVariability}
+                  defectResolutionStats={defectResolutionStats}
                 />
               )}
 

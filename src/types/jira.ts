@@ -19,6 +19,7 @@ export interface JiraIssue {
   summary: string;
   issue_type: string;
   project_key: string;
+  priority?: string;
   created: string;
   resolved?: string;
   story_points?: number;
@@ -55,6 +56,7 @@ export interface ProcessedStory {
   summary: string;
   issue_type: string;
   project_key: string;
+  priority?: string;
   sprint: string;
   created: string;
   resolved?: string;
@@ -73,4 +75,11 @@ export interface StatsResult {
   count: number;
 }
 
-export type TooltipType = 'leadTime' | 'cycleTime' | 'grooming' | 'dev' | 'qa' | null; 
+export type TooltipType = 'leadTime' | 'cycleTime' | 'grooming' | 'dev' | 'qa' | null;
+
+export interface DefectResolutionStats {
+  priority: string;
+  count: number;
+  stats: StatsResult;
+  resolutionTimes: number[];
+} 

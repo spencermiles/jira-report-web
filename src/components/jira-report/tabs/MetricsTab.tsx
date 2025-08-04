@@ -1,10 +1,11 @@
 import React from 'react';
-import { ProcessedStory, StatsResult } from '@/types/jira';
+import { ProcessedStory, StatsResult, DefectResolutionStats } from '@/types/jira';
 import { calculateStats } from '../utils/calculations';
 import StatCard from '../ui/StatCard';
 import CorrelationCard from '../ui/CorrelationCard';
 import FlowMetricCard from '../ui/FlowMetricCard';
 import CycleTimeCard from '../ui/CycleTimeCard';
+import DefectResolutionCard from '../ui/DefectResolutionCard';
 
 interface MetricsTabProps {
   filteredStories: ProcessedStory[];
@@ -15,6 +16,7 @@ interface MetricsTabProps {
   stageSkips: { groomingSkipPercentage: number; reviewSkipPercentage: number; skippedGrooming: number; skippedReview: number; totalStories: number };
   blockedTimeAnalysis: { blockedTimeRatio: number; avgBlockedTime: number; storiesBlocked: number; totalStories: number };
   stageVariability: Array<{ stage: string; stats: StatsResult; coefficient: number }>;
+  defectResolutionStats: DefectResolutionStats[];
 }
 
 const MetricsTab: React.FC<MetricsTabProps> = ({
@@ -25,7 +27,8 @@ const MetricsTab: React.FC<MetricsTabProps> = ({
   firstTimeThrough,
   stageSkips,
   blockedTimeAnalysis,
-  stageVariability
+  stageVariability,
+  defectResolutionStats
 }) => {
   // Calculate cycle time statistics
   const leadTimes = filteredStories
@@ -237,6 +240,21 @@ const MetricsTab: React.FC<MetricsTabProps> = ({
           ))}
         </div>
       </div>
+
+      {/* Defect Resolution Time */}
+      {defectResolutionStats.length > 0 && (
+        <div className="mb-8">
+          <h3 className="text-lg font-semibold text-gray-900 mb-4">Defect Resolution Time</h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+            {defectResolutionStats.map((defectStat) => (
+              <DefectResolutionCard
+                key={defectStat.priority}
+                defectStats={defectStat}
+              />
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Summary Statistics */}
       <div className="bg-gray-50 rounded-lg p-6">

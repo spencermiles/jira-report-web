@@ -7,6 +7,7 @@ interface FilterState {
   storyPoints: (number | 'none')[];
   statuses: string[];
   projectKeys: string[];
+  priorities: string[];
   createdStartDate: string;
   createdEndDate: string;
   resolvedStartDate: string;
@@ -21,6 +22,7 @@ interface AccordionState {
   storyPoints: boolean;
   status: boolean;
   projectKey: boolean;
+  priority: boolean;
 }
 
 interface FilterCount {
@@ -38,6 +40,7 @@ export const useFilters = (processedStories: ProcessedStory[], preselectedProjec
     storyPoints: [],
     statuses: ['resolved'],
     projectKeys: preselectedProjectKey ? [preselectedProjectKey] : [],
+    priorities: [],
     createdStartDate: '',
     createdEndDate: '',
     resolvedStartDate: '',
@@ -51,7 +54,8 @@ export const useFilters = (processedStories: ProcessedStory[], preselectedProjec
     sprint: false,
     storyPoints: false,
     status: false,
-    projectKey: false
+    projectKey: false,
+    priority: false
   });
 
   const getFilterOptions = () => {
@@ -454,6 +458,7 @@ export const useFilters = (processedStories: ProcessedStory[], preselectedProjec
       storyPoints: [],
       statuses: [],
       projectKeys: preselectedProjectKey ? [preselectedProjectKey] : [],
+      priorities: [],
       createdStartDate: '',
       createdEndDate: '',
       resolvedStartDate: '',
@@ -466,6 +471,7 @@ export const useFilters = (processedStories: ProcessedStory[], preselectedProjec
     filters.storyPoints.length > 0 || 
     filters.statuses.length > 0 || 
     filters.projectKeys.length > 0 || 
+    filters.priorities.length > 0 || 
     !!filters.createdStartDate || 
     !!filters.createdEndDate || 
     !!filters.resolvedStartDate || 

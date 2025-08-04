@@ -3,11 +3,5 @@
     "src/app/**/*.tsx": {
       "includeFiles": "src/**"
     }
-  },
-  "rewrites": [
-    {
-      "source": "/(.*)",
-      "destination": "/"
-    }
-  ]
+  }
 } 

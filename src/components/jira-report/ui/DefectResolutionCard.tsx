@@ -3,6 +3,7 @@ import { DefectResolutionStats } from '@/types/jira';
 
 interface DefectResolutionCardProps {
   defectStats: DefectResolutionStats;
+  onViewIssues?: (priority: string) => void;
 }
 
 const getPriorityColor = (priority: string): string => {
@@ -32,7 +33,7 @@ const getPriorityColor = (priority: string): string => {
   return 'text-gray-600 bg-gray-50 border-gray-200';
 };
 
-const DefectResolutionCard: React.FC<DefectResolutionCardProps> = ({ defectStats }) => {
+const DefectResolutionCard: React.FC<DefectResolutionCardProps> = ({ defectStats, onViewIssues }) => {
   const colorClasses = getPriorityColor(defectStats.priority);
   
   return (
@@ -67,9 +68,17 @@ const DefectResolutionCard: React.FC<DefectResolutionCardProps> = ({ defectStats
       </div>
       
       <div className="mt-2 pt-2 border-t border-current border-opacity-20">
-        <p className="text-xs leading-relaxed opacity-80">
+        <p className="text-xs leading-relaxed opacity-80 mb-2">
           Resolution time from creation to completion for {defectStats.priority.toLowerCase()} priority defects.
         </p>
+        {onViewIssues && (
+          <button
+            onClick={() => onViewIssues(defectStats.priority)}
+            className="text-xs font-medium underline hover:no-underline transition-all"
+          >
+            View Issues
+          </button>
+        )}
       </div>
     </div>
   );

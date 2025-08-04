@@ -17,6 +17,7 @@ interface MetricsTabProps {
   blockedTimeAnalysis: { blockedTimeRatio: number; avgBlockedTime: number; storiesBlocked: number; totalStories: number };
   stageVariability: Array<{ stage: string; stats: StatsResult; coefficient: number }>;
   defectResolutionStats: DefectResolutionStats[];
+  onViewDefectIssues?: (priority: string) => void;
 }
 
 const MetricsTab: React.FC<MetricsTabProps> = ({
@@ -28,7 +29,8 @@ const MetricsTab: React.FC<MetricsTabProps> = ({
   stageSkips,
   blockedTimeAnalysis,
   stageVariability,
-  defectResolutionStats
+  defectResolutionStats,
+  onViewDefectIssues
 }) => {
   // Calculate cycle time statistics
   const leadTimes = filteredStories
@@ -250,6 +252,7 @@ const MetricsTab: React.FC<MetricsTabProps> = ({
               <DefectResolutionCard
                 key={defectStat.priority}
                 defectStats={defectStat}
+                onViewIssues={onViewDefectIssues}
               />
             ))}
           </div>

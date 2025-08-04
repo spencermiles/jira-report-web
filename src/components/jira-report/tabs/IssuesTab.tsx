@@ -38,6 +38,11 @@ const IssuesTab: React.FC<IssuesTabProps> = ({
     if (key === 'issue_type') {
       return a.issue_type.localeCompare(b.issue_type) * multiplier;
     }
+    if (key === 'priority') {
+      const aPriority = a.priority || 'Unassigned';
+      const bPriority = b.priority || 'Unassigned';
+      return aPriority.localeCompare(bPriority) * multiplier;
+    }
     if (key === 'sprint') {
       return a.sprint.localeCompare(b.sprint) * multiplier;
     }
@@ -111,6 +116,12 @@ const IssuesTab: React.FC<IssuesTabProps> = ({
                   onClick={() => sortStories('issue_type')}
                 >
                   Type
+                </th>
+                <th 
+                  className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                  onClick={() => sortStories('priority')}
+                >
+                  Priority
                 </th>
                 <th 
                   className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
@@ -288,6 +299,11 @@ const IssuesTab: React.FC<IssuesTabProps> = ({
                   <td className="px-3 py-4 whitespace-nowrap">
                     <span className="text-sm text-gray-700">
                       {story.issue_type || 'Unknown'}
+                    </span>
+                  </td>
+                  <td className="px-3 py-4 whitespace-nowrap">
+                    <span className="text-sm text-gray-700">
+                      {story.priority || 'Unassigned'}
                     </span>
                   </td>
                   <td className="px-4 py-4">

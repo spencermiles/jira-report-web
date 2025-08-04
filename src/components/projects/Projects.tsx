@@ -3,11 +3,12 @@
 import React, { useMemo } from 'react';
 import { ArrowRight, Upload, FileText } from 'lucide-react';
 import { useJiraDataContext } from '@/contexts/jira-data-context';
-import { ProcessedStory, StatsResult } from '@/types/jira';
+import { ProcessedStory, StatsResult, DefectResolutionStats } from '@/types/jira';
 import { paths } from '@/lib/paths';
 import { calculateStats } from '@/components/jira-report/utils/calculations';
 import StatCard from '@/components/jira-report/ui/StatCard';
 import CycleTimeCard from '@/components/jira-report/ui/CycleTimeCard';
+import DefectResolutionSummaryWidget from './DefectResolutionSummaryWidget';
 
 interface ProjectSummary {
   projectKey: string;
@@ -15,6 +16,7 @@ interface ProjectSummary {
   cycleTimeStats: StatsResult;
   leadTimeStats: StatsResult;
   resolvedStories: number;
+  defectResolutionStats: DefectResolutionStats[];
 }
 
 const Projects: React.FC = () => {
@@ -60,12 +62,73 @@ const Projects: React.FC = () => {
         story.resolved && (story.metrics.cycleTime || story.metrics.leadTime)
       );
 
+      // Calculate defect resolution time for this project
+      const defectTypes = ['bug', 'defect', 'issue', 'incident'];
+      const resolvedDefects = stories.filter(story => 
+        story.resolved && 
+        defectTypes.some(type => story.issue_type.toLowerCase().includes(type.toLowerCase()))
+      );
+
+      const defectResolutionStats: DefectResolutionStats[] = [];
+      if (resolvedDefects.length > 0) {
+        // Group by priority
+        const priorityGroups: Record<string, ProcessedStory[]> = {};
+        
+        resolvedDefects.forEach(defect => {
+          const priority = defect.priority || 'Unassigned';
+          if (!priorityGroups[priority]) {
+            priorityGroups[priority] = [];
+          }
+          priorityGroups[priority].push(defect);
+        });
+
+        // Calculate resolution time for each priority
+        const stats = Object.entries(priorityGroups)
+          .map(([priority, defects]) => {
+            // Calculate resolution times in days
+            const resolutionTimes = defects.map(defect => {
+              const createdDate = new Date(defect.created);
+              const resolvedDate = new Date(defect.resolved!);
+              const diffInDays = (resolvedDate.getTime() - createdDate.getTime()) / (1000 * 60 * 60 * 24);
+              return Math.round(diffInDays * 10) / 10; // Round to 1 decimal place
+            });
+
+            const statsResult = calculateStats(resolutionTimes);
+
+            return {
+              priority,
+              count: defects.length,
+              stats: statsResult,
+              resolutionTimes
+            };
+          })
+          .sort((a, b) => {
+            // Sort by priority: P1, P2, P3, etc., then others alphabetically
+            const aPriority = a.priority.toLowerCase();
+            const bPriority = b.priority.toLowerCase();
+            
+            const aIsP = aPriority.match(/^p(\d+)$/);
+            const bIsP = bPriority.match(/^p(\d+)$/);
+            
+            if (aIsP && bIsP) {
+              return parseInt(aIsP[1]) - parseInt(bIsP[1]);
+            }
+            if (aIsP && !bIsP) return -1;
+            if (!aIsP && bIsP) return 1;
+            
+            return aPriority.localeCompare(bPriority);
+          });
+
+        defectResolutionStats.push(...stats);
+      }
+
       return {
         projectKey,
         storyCount: stories.length,
         cycleTimeStats,
         leadTimeStats,
         resolvedStories: resolvedStoriesWithMetrics.length,
+        defectResolutionStats,
       };
     });
 
@@ -193,7 +256,7 @@ const Projects: React.FC = () => {
                     )}
                   </div>
                   
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                     {/* Cycle Time */}
                     <CycleTimeCard
                       value={project.cycleTimeStats.median}
@@ -208,6 +271,11 @@ const Projects: React.FC = () => {
                       title="Lead Time" 
                       stats={project.leadTimeStats}
                       unit=" days"
+                    />
+
+                    {/* Defect Resolution Time */}
+                    <DefectResolutionSummaryWidget
+                      defectResolutionStats={project.defectResolutionStats}
                     />
                   </div>
                 </div>

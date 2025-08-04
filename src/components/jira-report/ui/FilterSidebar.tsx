@@ -50,6 +50,7 @@ interface AccordionState {
   storyPoints: boolean;
   status: boolean;
   projectKey: boolean;
+  priority: boolean;
 }
 
 interface FilterSidebarProps {
@@ -60,6 +61,7 @@ interface FilterSidebarProps {
     storyPoints: (number | 'none')[];
     statuses: string[];
     projectKeys: string[];
+    priorities: string[];
     createdStartDate: string;
     createdEndDate: string;
     resolvedStartDate: string;
@@ -76,6 +78,7 @@ interface FilterSidebarProps {
     storyPointCounts: FilterCount[];
     statusCounts: FilterCount[];
     projectKeyCounts: FilterCount[];
+    priorityCounts: FilterCount[];
   };
   
   // Filter actions
@@ -84,6 +87,7 @@ interface FilterSidebarProps {
   toggleStoryPoint: (points: number | 'none') => void;
   toggleStatus: (status: string) => void;
   toggleProjectKey: (projectKey: string) => void;
+  togglePriority: (priority: string) => void;
   selectAllIssueTypes: () => void;
   deselectAllIssueTypes: () => void;
   setCreatedStartDate: (date: string) => void;
@@ -108,6 +112,7 @@ const FilterSidebar: React.FC<FilterSidebarProps> = ({
   toggleStoryPoint,
   toggleStatus,
   toggleProjectKey,
+  togglePriority,
   selectAllIssueTypes,
   deselectAllIssueTypes,
   setCreatedStartDate,
@@ -120,7 +125,7 @@ const FilterSidebar: React.FC<FilterSidebarProps> = ({
   totalStoriesCount,
   hasActiveFilters
 }) => {
-  const { issueTypeCounts, sprintCounts, storyPointCounts, statusCounts, projectKeyCounts } = filterCounts;
+  const { issueTypeCounts, sprintCounts, storyPointCounts, statusCounts, projectKeyCounts, priorityCounts } = filterCounts;
 
   return (
     <div className="w-64 bg-gray-50 border-r border-gray-200 p-4 space-y-4 overflow-y-auto h-screen sticky top-0" style={{ minWidth: '256px' }}>
@@ -367,6 +372,32 @@ const FilterSidebar: React.FC<FilterSidebarProps> = ({
                   type="checkbox"
                   checked={filters.projectKeys.includes(value as string)}
                   onChange={() => toggleProjectKey(value as string)}
+                  className="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                />
+                <span className="text-sm text-gray-700 flex-1">{value}</span>
+                <span className="text-xs text-gray-500">({count})</span>
+              </label>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Priority Filter */}
+      <div>
+        <AccordionHeader
+          title="Priority"
+          isOpen={accordionStates.priority}
+          onClick={() => toggleAccordion('priority')}
+          activeCount={filters.priorities.length}
+        />
+        {accordionStates.priority && (
+          <div className="mt-3 space-y-2">
+            {priorityCounts.map(({ value, count }) => (
+              <label key={value} className="flex items-center space-x-2 cursor-pointer hover:bg-gray-100 p-1 rounded">
+                <input
+                  type="checkbox"
+                  checked={filters.priorities.includes(value as string)}
+                  onChange={() => togglePriority(value as string)}
                   className="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
                 />
                 <span className="text-sm text-gray-700 flex-1">{value}</span>

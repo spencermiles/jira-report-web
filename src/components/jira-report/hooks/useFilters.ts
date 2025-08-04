@@ -62,6 +62,22 @@ export const useFilters = (processedStories: ProcessedStory[], preselectedProjec
     const issueTypes = [...new Set(processedStories.map(story => story.issue_type))].sort();
     const sprints = [...new Set(processedStories.map(story => story.sprint))].filter(Boolean).sort();
     const projectKeys = [...new Set(processedStories.map(story => story.project_key))].filter(Boolean).sort();
+    const priorities = [...new Set(processedStories.map(story => story.priority || 'Unassigned'))].sort((a, b) => {
+      // Sort by priority: P1, P2, P3, etc., then others alphabetically
+      const aPriority = a.toLowerCase();
+      const bPriority = b.toLowerCase();
+      
+      const aIsP = aPriority.match(/^p(\d+)$/);
+      const bIsP = bPriority.match(/^p(\d+)$/);
+      
+      if (aIsP && bIsP) {
+        return parseInt(aIsP[1]) - parseInt(bIsP[1]);
+      }
+      if (aIsP && !bIsP) return -1;
+      if (!aIsP && bIsP) return 1;
+      
+      return aPriority.localeCompare(bPriority);
+    });
     const storyPointsSet = new Set<number | 'none'>();
     
     processedStories.forEach(story => {
@@ -78,7 +94,7 @@ export const useFilters = (processedStories: ProcessedStory[], preselectedProjec
       return a - b;
     });
 
-    return { issueTypes, sprints, projectKeys, storyPoints };
+    return { issueTypes, sprints, projectKeys, priorities, storyPoints };
   };
 
   const filteredStories = useMemo(() => {
@@ -160,12 +176,20 @@ export const useFilters = (processedStories: ProcessedStory[], preselectedProjec
         return false;
       }
 
+      // Priority filter
+      if (filters.priorities.length > 0) {
+        const storyPriority = story.priority || 'Unassigned';
+        if (!filters.priorities.includes(storyPriority)) {
+          return false;
+        }
+      }
+
       return true;
     });
   }, [processedStories, filters]);
 
   const getFilterCounts = () => {
-    const { issueTypes, sprints, storyPoints, projectKeys } = getFilterOptions();
+    const { issueTypes, sprints, storyPoints, projectKeys, priorities } = getFilterOptions();
     
     const issueTypeCounts: FilterCount[] = issueTypes.map(type => ({
       value: type,
@@ -359,7 +383,48 @@ export const useFilters = (processedStories: ProcessedStory[], preselectedProjec
       }).length
     }));
 
-    return { issueTypeCounts, sprintCounts, storyPointCounts, statusCounts, projectKeyCounts };
+    const priorityCounts: FilterCount[] = priorities.map(priority => ({
+      value: priority,
+      count: processedStories.filter(story => {
+        // Apply other active filters but not priority filter
+        if (filters.issueTypes.length > 0 && !filters.issueTypes.includes(story.issue_type)) return false;
+        if (filters.sprints.length > 0 && !filters.sprints.includes(story.sprint)) return false;
+        if (filters.storyPoints.length > 0) {
+          const storyPointValue = (story.story_points && story.story_points > 0) ? story.story_points : 'none';
+          if (!filters.storyPoints.includes(storyPointValue)) return false;
+        }
+        if (filters.statuses.length > 0) {
+          const isResolved = story.resolved != null;
+          const statusValue = isResolved ? 'resolved' : 'unresolved';
+          if (!filters.statuses.includes(statusValue)) return false;
+        }
+        // Apply date filters
+        if (filters.createdStartDate || filters.createdEndDate) {
+          const createdDate = new Date(story.created);
+          if (filters.createdStartDate && createdDate < new Date(filters.createdStartDate)) return false;
+          if (filters.createdEndDate) {
+            const endDate = new Date(filters.createdEndDate);
+            endDate.setHours(23, 59, 59, 999);
+            if (createdDate > endDate) return false;
+          }
+        }
+        if (filters.resolvedStartDate || filters.resolvedEndDate) {
+          if (!story.resolved) return false;
+          const resolvedDate = new Date(story.resolved);
+          if (filters.resolvedStartDate && resolvedDate < new Date(filters.resolvedStartDate)) return false;
+          if (filters.resolvedEndDate) {
+            const endDate = new Date(filters.resolvedEndDate);
+            endDate.setHours(23, 59, 59, 999);
+            if (resolvedDate > endDate) return false;
+          }
+        }
+        if (filters.projectKeys.length > 0 && !filters.projectKeys.includes(story.project_key)) return false;
+        const storyPriority = story.priority || 'Unassigned';
+        return storyPriority === priority;
+      }).length
+    }));
+
+    return { issueTypeCounts, sprintCounts, storyPointCounts, statusCounts, projectKeyCounts, priorityCounts };
   };
 
   const toggleIssueType = (issueType: string) => {
@@ -404,6 +469,15 @@ export const useFilters = (processedStories: ProcessedStory[], preselectedProjec
       projectKeys: prev.projectKeys.includes(projectKey)
         ? prev.projectKeys.filter(pk => pk !== projectKey)
         : [...prev.projectKeys, projectKey]
+    }));
+  };
+
+  const togglePriority = (priority: string) => {
+    setFilters(prev => ({
+      ...prev,
+      priorities: prev.priorities.includes(priority)
+        ? prev.priorities.filter(p => p !== priority)
+        : [...prev.priorities, priority]
     }));
   };
 
@@ -495,6 +569,7 @@ export const useFilters = (processedStories: ProcessedStory[], preselectedProjec
     toggleStoryPoint,
     toggleStatus,
     toggleProjectKey,
+    togglePriority,
     selectAllIssueTypes,
     deselectAllIssueTypes,
     setCreatedStartDate,

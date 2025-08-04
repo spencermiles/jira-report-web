@@ -64,6 +64,7 @@ const JiraIssueReport: React.FC<JiraIssueReportProps> = ({ preselectedProjectKey
     toggleStoryPoint,
     toggleStatus,
     toggleProjectKey,
+    togglePriority,
     selectAllIssueTypes,
     deselectAllIssueTypes,
     setCreatedStartDate,
@@ -77,6 +78,18 @@ const JiraIssueReport: React.FC<JiraIssueReportProps> = ({ preselectedProjectKey
 
   // Sorting
   const { sortConfig, sortedStories, sortStories } = useSorting(filteredStories);
+
+  // Handler for viewing defect issues by priority
+  const handleViewDefectIssues = (priority: string) => {
+    // Clear all current filters and set priority filter
+    clearAllFilters();
+    // Set the priority filter after clearing
+    setTimeout(() => {
+      togglePriority(priority);
+    }, 0);
+    // Switch to issues tab
+    setActiveTab('issues');
+  };
 
   // Metrics calculations
   const {
@@ -116,6 +129,7 @@ const JiraIssueReport: React.FC<JiraIssueReportProps> = ({ preselectedProjectKey
           toggleStoryPoint={toggleStoryPoint}
           toggleStatus={toggleStatus}
           toggleProjectKey={toggleProjectKey}
+          togglePriority={togglePriority}
           selectAllIssueTypes={selectAllIssueTypes}
           deselectAllIssueTypes={deselectAllIssueTypes}
           setCreatedStartDate={setCreatedStartDate}
@@ -225,6 +239,7 @@ const JiraIssueReport: React.FC<JiraIssueReportProps> = ({ preselectedProjectKey
                   blockedTimeAnalysis={blockedTimeAnalysis}
                   stageVariability={stageVariability}
                   defectResolutionStats={defectResolutionStats}
+                  onViewDefectIssues={handleViewDefectIssues}
                 />
               )}
 

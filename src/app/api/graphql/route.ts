@@ -3,6 +3,7 @@ import { startServerAndCreateNextHandler } from '@as-integrations/next';
 import { NextRequest } from 'next/server';
 import { typeDefs } from '@/lib/graphql/schema';
 import { resolvers } from '@/lib/graphql/resolvers';
+import { createDataLoaders } from '@/lib/graphql/dataloaders';
 
 const server = new ApolloServer({
   typeDefs,
@@ -12,7 +13,10 @@ const server = new ApolloServer({
 });
 
 const handler = startServerAndCreateNextHandler<NextRequest>(server, {
-  context: async (req) => ({ req }),
+  context: async (req) => ({ 
+    req,
+    dataloaders: createDataLoaders()
+  }),
 });
 
 export async function GET(request: NextRequest) {

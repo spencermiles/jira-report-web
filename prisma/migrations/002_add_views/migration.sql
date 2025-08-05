@@ -86,17 +86,17 @@ SELECT
   p.name,
   COUNT(i.id) as total_issues,
   COUNT(CASE WHEN i.resolved IS NOT NULL THEN 1 END) as resolved_issues,
-  ROUND(AVG(CASE WHEN i.resolved IS NOT NULL THEN im.lead_time END), 1) as avg_lead_time,
-  ROUND(AVG(CASE WHEN i.resolved IS NOT NULL THEN im.cycle_time END), 1) as avg_cycle_time,
+  ROUND(CAST(AVG(CASE WHEN i.resolved IS NOT NULL THEN im.lead_time END) AS NUMERIC), 1) as avg_lead_time,
+  ROUND(CAST(AVG(CASE WHEN i.resolved IS NOT NULL THEN im.cycle_time END) AS NUMERIC), 1) as avg_cycle_time,
   -- Flow efficiency calculation
   CASE 
     WHEN AVG(CASE WHEN i.resolved IS NOT NULL THEN im.lead_time END) > 0 
     THEN ROUND(
-      (AVG(CASE WHEN i.resolved IS NOT NULL THEN 
+      CAST((AVG(CASE WHEN i.resolved IS NOT NULL THEN 
         COALESCE(im.grooming_cycle_time, 0) + 
         COALESCE(im.dev_cycle_time, 0) + 
         COALESCE(im.qa_cycle_time, 0) 
-      END) / AVG(CASE WHEN i.resolved IS NOT NULL THEN im.lead_time END)) * 100, 1
+      END) / AVG(CASE WHEN i.resolved IS NOT NULL THEN im.lead_time END)) * 100 AS NUMERIC), 1
     )
     ELSE 0 
   END as flow_efficiency,
@@ -104,8 +104,8 @@ SELECT
   CASE 
     WHEN COUNT(CASE WHEN i.resolved IS NOT NULL THEN 1 END) > 0
     THEN ROUND(
-      (COUNT(CASE WHEN i.resolved IS NOT NULL AND im.review_churn = 0 AND im.qa_churn = 0 THEN 1 END)::FLOAT / 
-       COUNT(CASE WHEN i.resolved IS NOT NULL THEN 1 END)::FLOAT) * 100, 1
+      CAST((COUNT(CASE WHEN i.resolved IS NOT NULL AND im.review_churn = 0 AND im.qa_churn = 0 THEN 1 END)::FLOAT / 
+       COUNT(CASE WHEN i.resolved IS NOT NULL THEN 1 END)::FLOAT) * 100 AS NUMERIC), 1
     )
     ELSE 0
   END as first_time_through

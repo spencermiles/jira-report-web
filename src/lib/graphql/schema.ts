@@ -97,6 +97,64 @@ export const typeDefs = gql`
     createdBefore: DateTime
     resolvedAfter: DateTime
     resolvedBefore: DateTime
+    # Enhanced filtering options
+    cycleTimeMin: Float
+    cycleTimeMax: Float
+    leadTimeMin: Float
+    leadTimeMax: Float
+    hasBlockers: Boolean
+    hasChurn: Boolean
+    parentKey: String
+    search: String
+    tags: [String!]
+  }
+
+  input PaginationInput {
+    limit: Int = 50
+    offset: Int = 0
+  }
+
+  input SortInput {
+    field: String! # "created", "resolved", "cycleTime", "leadTime", "priority", "storyPoints"
+    direction: SortDirection! = ASC
+  }
+
+  enum SortDirection {
+    ASC
+    DESC
+  }
+
+  type IssuesResponse {
+    issues: [Issue!]!
+    totalCount: Int!
+    hasNextPage: Boolean!
+    hasPreviousPage: Boolean!
+  }
+
+  type ProjectSummaryResponse {
+    projects: [ProjectWithSummary!]!
+    totalCount: Int!
+    aggregatedMetrics: AggregatedMetrics!
+  }
+
+  type ProjectWithSummary {
+    id: ID!
+    key: String!
+    name: String!
+    createdAt: DateTime!
+    updatedAt: DateTime!
+    metrics: ProjectMetrics!
+    issueCount: Int!
+    lastActivity: DateTime
+  }
+
+  type AggregatedMetrics {
+    totalProjects: Int!
+    totalIssues: Int!
+    totalResolvedIssues: Int!
+    overallAverageLeadTime: Float
+    overallAverageCycleTime: Float
+    overallFlowEfficiency: Float
   }
 
   input JiraIssueInput {
@@ -145,8 +203,42 @@ export const typeDefs = gql`
   type Query {
     projects: [Project!]!
     project(key: String!): Project
-    issues(filters: IssueFilters): [Issue!]!
+    projectSummaries(
+      filters: IssueFilters
+      pagination: PaginationInput
+      sort: SortInput
+    ): ProjectSummaryResponse!
+    issues(
+      filters: IssueFilters
+      pagination: PaginationInput
+      sort: SortInput
+    ): IssuesResponse!
     issue(key: String!): Issue
+    # Advanced analytics queries
+    cycleTimeDistribution(
+      projectKeys: [String!]
+      filters: IssueFilters
+    ): [CycleTimeDistributionBucket!]!
+    flowMetricsTrend(
+      projectKeys: [String!]
+      period: String! # "week", "month", "quarter"
+      filters: IssueFilters
+    ): [FlowMetricsTrendPoint!]!
+  }
+
+  type CycleTimeDistributionBucket {
+    range: String! # "0-1", "1-3", "3-7", etc.
+    count: Int!
+    percentage: Float!
+  }
+
+  type FlowMetricsTrendPoint {
+    period: String! # "2024-01", "2024-W01", etc.
+    averageCycleTime: Float
+    averageLeadTime: Float
+    flowEfficiency: Float
+    throughput: Int!
+    firstTimeThrough: Float
   }
 
   type Mutation {

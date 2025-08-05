@@ -1,0 +1,122 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL") // uses connection pooling
+  // directUrl = env("POSTGRES_URL_NON_POOLING") // uses a direct connection
+}
+
+model Project {
+  id        Int      @id @default(autoincrement())
+  key       String   @unique @db.VarChar(50)
+  name      String   @db.VarChar(255)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  // Relations
+  issues           Issue[]
+  sprints          Sprint[]
+  workflowMappings WorkflowMapping[]
+
+  @@map("projects")
+}
+
+model WorkflowMapping {
+  id             Int    @id @default(autoincrement())
+  projectId      Int    @map("project_id")
+  jiraStatusName String @map("jira_status_name") @db.VarChar(200)
+  canonicalStage String @map("canonical_stage") @db.VarChar(50)
+
+  // Relations
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, jiraStatusName])
+  @@index([projectId])
+  @@index([canonicalStage])
+  @@map("workflow_mappings")
+}
+
+model Sprint {
+  id        Int       @id @default(autoincrement())
+  name      String    @db.VarChar(255)
+  startDate DateTime? @map("start_date") @db.Timestamptz
+  endDate   DateTime? @map("end_date") @db.Timestamptz
+  projectId Int       @map("project_id")
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz
+
+  // Relations  
+  project       Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  issuesSprints IssuesSprints[]
+
+  @@unique([projectId, name], name: "projectId_name")
+  @@index([projectId])
+  @@map("sprints")
+}
+
+model Issue {
+  id          Int       @id @default(autoincrement())
+  jiraId      String    @unique @map("jira_id") @db.VarChar(50)
+  key         String    @unique @db.VarChar(50)
+  summary     String    @db.Text
+  issueType   String    @map("issue_type") @db.VarChar(100)
+  priority    String?   @db.VarChar(50)
+  projectId   Int       @map("project_id")
+  storyPoints Int?      @map("story_points")
+  parentKey   String?   @map("parent_key") @db.VarChar(50)
+  webUrl      String?   @map("web_url") @db.Text
+  created     DateTime  @db.Timestamptz
+  resolved    DateTime? @db.Timestamptz
+  rawData     Json      @map("raw_data") // Store complete JIRA JSON
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt   DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+
+  // Relations
+  project       Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  statusChanges StatusChange[]
+  issuesSprints IssuesSprints[]
+
+  // Self-relation for parent/child issues
+  parent   Issue?  @relation("IssueHierarchy", fields: [parentKey], references: [key])
+  children Issue[] @relation("IssueHierarchy")
+
+  @@index([projectId])
+  @@index([issueType])
+  @@index([priority])
+  @@index([created])
+  @@index([resolved])
+  @@index([storyPoints])
+  @@index([parentKey])
+  @@map("issues")
+}
+
+model StatusChange {
+  id        Int      @id @default(autoincrement())
+  issueId   Int      @map("issue_id")
+  fieldName String   @map("field_name") @db.VarChar(50)
+  fromValue String?  @map("from_value") @db.VarChar(200)
+  toValue   String?  @map("to_value") @db.VarChar(200)
+  changed   DateTime @db.Timestamptz // When the change occurred in JIRA
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  // Relations
+  issue Issue @relation(fields: [issueId], references: [id], onDelete: Cascade)
+
+  @@index([issueId])
+  @@index([fieldName])
+  @@index([changed])
+  @@index([fieldName, toValue]) // For workflow lookups
+  @@map("status_changes")
+}
+
+model IssuesSprints {
+  issueId  Int @map("issue_id")
+  sprintId Int @map("sprint_id")
+
+  issue  Issue  @relation(fields: [issueId], references: [id], onDelete: Cascade)
+  sprint Sprint @relation(fields: [sprintId], references: [id], onDelete: Cascade)
+
+  @@id([issueId, sprintId])
+  @@map("issues_sprints")
+}

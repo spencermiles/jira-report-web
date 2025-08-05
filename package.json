@@ -9,12 +9,28 @@
     "lint": "next lint",
     "lint:fix": "next lint --fix",
     "lint:check": "next lint --max-warnings 0",
-    "prebuild": "npm run lint:check"
+    "prebuild": "npm run lint:check",
+    "db:generate": "prisma generate",
+    "db:push": "prisma db push",
+    "db:migrate": "prisma migrate deploy",
+    "db:seed": "tsx prisma/seed.ts",
+    "postinstall": "prisma generate",
+    "import": "tsx scripts/import-jira-data.ts",
+    "import:help": "tsx scripts/import-jira-data.ts --help"
   },
   "dependencies": {
+    "@apollo/client": "^3.13.0",
+    "@apollo/server": "^4.10.0",
+    "@apollo/experimental-nextjs-app-support": "^0.12.3",
+    "@as-integrations/next": "^3.0.0",
+    "@prisma/client": "^5.8.1",
     "chart.js": "^4.5.0",
+    "commander": "^11.1.0",
+    "graphql": "^16.8.1",
+    "graphql-tag": "^2.12.6",
     "lucide-react": "^0.525.0",
     "next": "15.3.4",
+    "ora": "^8.0.1",
     "react": "^19.0.0",
     "react-chartjs-2": "^5.3.0",
     "react-dom": "^19.0.0"
@@ -22,12 +38,15 @@
   "devDependencies": {
     "@eslint/eslintrc": "^3",
     "@tailwindcss/postcss": "^4",
+    "@types/graphql": "^14.5.0",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "15.3.4",
+    "prisma": "^5.8.1",
     "tailwindcss": "^4",
+    "tsx": "^4.7.0",
     "typescript": "^5"
   }
 }

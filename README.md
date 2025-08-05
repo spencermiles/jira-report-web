@@ -1,22 +1,34 @@
 # Jira Report Web
 
-A modern Next.js application for analyzing JIRA story reports with detailed cycle time metrics.
+A modern full-stack application for analyzing JIRA data with detailed cycle time metrics, featuring a Next.js frontend, GraphQL API, and PostgreSQL database.
 
 ## Features
 
-- 📊 **JIRA Story Analysis**: Upload JSON exports from JIRA to analyze story performance
-- ⏱️ **Cycle Time Metrics**: Calculate lead time, grooming time, dev time, and QA time
-- 📈 **Statistical Summary**: View median, mean, range, and standard deviation for all metrics
-- 🔄 **Churn Tracking**: Monitor review and QA churn counts
-- 🚫 **Blocker Analysis**: Track blocked status occurrences
-- 📅 **Timeline Tracking**: See when stories moved through each status
-- 🎨 **Modern UI**: Beautiful, responsive interface built with Tailwind CSS
-- ⚡ Next.js 15 with App Router
-- 📝 TypeScript for complete type safety
-- 🧹 ESLint for code quality
-- 🔐 Auth context ready for authentication
-- 🛠️ Utility functions and API helpers
-- 📁 Well-organized project structure
+### 📊 **JIRA Data Analysis**
+- Import JIRA exports via CLI or web interface
+- Multi-project support with custom workflow mappings
+- Real-time cycle time calculations using PostgreSQL views
+- Statistical analysis with median, mean, range, and standard deviation
+
+### ⏱️ **Advanced Metrics**
+- **Lead Time**: Total time from creation to completion
+- **Cycle Time**: Active development time
+- **Stage-specific Times**: Grooming, development, QA, review times
+- **Flow Efficiency**: Ratio of active work to wait time
+- **First Time Through**: Success rate without rework
+
+### 🔄 **Process Insights**
+- Review and QA churn tracking
+- Blocker analysis and impact measurement
+- Sprint performance analysis
+- Defect resolution time by priority
+
+### 🏗️ **Modern Architecture**
+- **Frontend**: Next.js 15 with App Router, TypeScript, Tailwind CSS
+- **Backend**: GraphQL API with Apollo Server
+- **Database**: PostgreSQL with Prisma ORM
+- **Deployment**: Vercel-optimized with serverless functions
+- **CLI Tools**: Direct data import from JIRA exports
 
 ## Getting Started
 
@@ -41,13 +53,46 @@ npm run dev
 
 ## Usage
 
-1. **Export JIRA Data**: Export your JIRA issues as JSON from your JIRA instance
-2. **Upload File**: Use the file upload interface to select your JSON export
-3. **View Analysis**: The app will automatically process stories and display:
-   - Summary statistics for cycle times
-   - Detailed story-by-story breakdown
-   - Interactive sorting by any column
-   - Tooltips explaining each metric
+### Data Import (CLI)
+
+Import JIRA data directly from JSON files:
+
+```bash
+# Basic import
+npm run import path/to/jira-export.json
+
+# Advanced options
+npm run import data/export.json \
+  --project "WEBAPP" \
+  --name "Web Application" \
+  --workflow-config custom-workflow.json \
+  --verbose
+
+# Generate workflow config template
+npm run import generate-workflow-config --output my-workflow.json
+```
+
+See [CLI_IMPORT_GUIDE.md](CLI_IMPORT_GUIDE.md) for detailed usage instructions.
+
+### Database Setup
+
+1. **Setup Vercel Postgres**:
+   ```bash
+   # See DEPLOYMENT.md for detailed setup instructions
+   vercel env pull .env.local
+   npm run db:push
+   ```
+
+2. **Test GraphQL API**:
+   - Visit `http://localhost:3000/api/graphql` 
+   - Run sample queries to verify data import
+
+### Web Interface
+
+1. **View Projects**: Browse imported projects and their metrics
+2. **Filter Data**: Use advanced filtering by dates, priorities, types
+3. **Analyze Metrics**: View cycle times, flow efficiency, and trends
+4. **Export Reports**: Generate insights and performance reports
 
 ### Supported Metrics
 

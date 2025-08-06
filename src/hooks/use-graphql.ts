@@ -10,11 +10,8 @@ import {
   GET_CYCLE_TIME_DISTRIBUTION,
   GET_FLOW_METRICS_TREND,
   GET_DASHBOARD_DATA,
-} from '@/lib/graphql/queries';
-import {
   UPLOAD_JIRA_DATA,
-  DELETE_PROJECT,
-} from '@/lib/graphql/mutations';
+} from '@/lib/graphql/queries';
 
 // Type definitions for query variables and results
 export interface IssueFilters {
@@ -279,14 +276,3 @@ export function useUploadJiraData(options?: MutationHookOptions) {
   });
 }
 
-export function useDeleteProject(options?: MutationHookOptions) {
-  return useMutation(DELETE_PROJECT, {
-    ...options,
-    refetchQueries: [
-      'GetProjectSummaries',
-      'GetProjects',
-      'GetDashboardData',
-    ],
-    awaitRefetchQueries: true,
-  });
-}

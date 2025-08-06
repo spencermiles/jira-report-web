@@ -1,10 +1,12 @@
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
 import { useQuery } from '@apollo/client';
+import { Plus } from 'lucide-react';
 import { GET_COMPANIES } from '@/lib/graphql/queries';
 import { paths } from '@/lib/paths';
 import { useRouter } from 'next/navigation';
+import CreateCompanyModal from '@/components/company/CreateCompanyModal';
 
 interface CompanyMetrics {
   totalProjects: number;
@@ -38,7 +40,8 @@ interface CompaniesResponse {
 
 export default function CompaniesPage() {
   const router = useRouter();
-  const { data, loading, error } = useQuery<{ companies: CompaniesResponse }>(GET_COMPANIES, {
+  const [createModalOpen, setCreateModalOpen] = useState(false);
+  const { data, loading, error, refetch } = useQuery<{ companies: CompaniesResponse }>(GET_COMPANIES, {
     variables: {
       pagination: { limit: 20, offset: 0 },
       sortBy: 'name'
@@ -90,16 +93,34 @@ export default function CompaniesPage() {
     <div className="min-h-screen bg-gray-50 p-6">
       <div className="mx-auto max-w-7xl">
         <div className="mb-8">
-          <h1 className="text-2xl font-bold text-gray-900">Companies</h1>
-          <p className="mt-1 text-sm text-gray-600">
-            Select a company to view their analytics dashboard
-          </p>
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-2xl font-bold text-gray-900">Companies</h1>
+              <p className="mt-1 text-sm text-gray-600">
+                Select a company to view their analytics dashboard
+              </p>
+            </div>
+            <button
+              onClick={() => setCreateModalOpen(true)}
+              className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors"
+            >
+              <Plus className="h-4 w-4 mr-2" />
+              New Company
+            </button>
+          </div>
         </div>
 
         {companies.length === 0 ? (
           <div className="bg-white rounded-lg border border-gray-200 p-12 text-center">
             <h2 className="text-lg font-medium text-gray-900 mb-2">No Companies Found</h2>
-            <p className="text-gray-600">There are no companies set up in the system yet.</p>
+            <p className="text-gray-600 mb-6">There are no companies set up in the system yet.</p>
+            <button
+              onClick={() => setCreateModalOpen(true)}
+              className="inline-flex items-center px-6 py-3 border border-transparent text-base font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors"
+            >
+              <Plus className="h-5 w-5 mr-2" />
+              Create Your First Company
+            </button>
           </div>
         ) : (
           <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
@@ -188,6 +209,13 @@ export default function CompaniesPage() {
           </div>
         )}
       </div>
+      
+      {/* Create Company Modal */}
+      <CreateCompanyModal
+        isOpen={createModalOpen}
+        onClose={() => setCreateModalOpen(false)}
+        onSuccess={() => refetch()}
+      />
     </div>
   );
 }

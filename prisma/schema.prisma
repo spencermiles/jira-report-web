@@ -93,7 +93,7 @@ model Sprint {
 
 model Issue {
   id          Int       @id @default(autoincrement())
-  jiraId      String    @unique @map("jira_id") @db.VarChar(50)
+  jiraId      String    @map("jira_id") @db.VarChar(50)
   key         String    @db.VarChar(50)
   summary     String    @db.Text
   issueType   String    @map("issue_type") @db.VarChar(100)
@@ -121,6 +121,7 @@ model Issue {
   // children Issue[] @relation("IssueHierarchy")
 
   @@unique([companyId, key], name: "issues_company_key_unique")
+  @@unique([companyId, jiraId], name: "issues_company_jira_id_unique")
   @@index([companyId])
   @@index([projectId])
   @@index([companyId, created])

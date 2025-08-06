@@ -533,21 +533,21 @@ export const resolvers = {
             COUNT(DISTINCT p.id) as total_projects,
             SUM(COALESCE(ps.total_issues, 0)) as total_issues,
             SUM(COALESCE(ps.resolved_issues, 0)) as total_resolved_issues,
-            -- Calculate weighted averages across all issues, not project averages
+            -- Use medians for consistency with individual project displays
             CASE 
               WHEN SUM(CASE WHEN im.lead_time IS NOT NULL THEN 1 ELSE 0 END) > 0 
-              THEN ROUND(CAST(AVG(im.lead_time) AS NUMERIC), 1)
+              THEN ROUND(CAST(PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY im.lead_time) AS NUMERIC), 1)
               ELSE NULL 
             END as overall_avg_lead_time,
             CASE 
               WHEN SUM(CASE WHEN im.cycle_time IS NOT NULL THEN 1 ELSE 0 END) > 0 
-              THEN ROUND(CAST(AVG(im.cycle_time) AS NUMERIC), 1)
+              THEN ROUND(CAST(PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY im.cycle_time) AS NUMERIC), 1)
               ELSE NULL 
             END as overall_avg_cycle_time,
-            -- Flow efficiency calculated from the weighted averages
+            -- Flow efficiency calculated using medians
             CASE 
-              WHEN AVG(im.lead_time) > 0 AND AVG(im.cycle_time) IS NOT NULL
-              THEN ROUND(CAST((AVG(im.cycle_time) / AVG(im.lead_time)) * 100 AS NUMERIC), 1)
+              WHEN PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY im.lead_time) > 0 AND PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY im.cycle_time) IS NOT NULL
+              THEN ROUND(CAST((PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY im.cycle_time) / PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY im.lead_time)) * 100 AS NUMERIC), 1)
               ELSE NULL 
             END as overall_flow_efficiency
           FROM projects p
@@ -589,6 +589,7 @@ export const resolvers = {
           totalProjects: Number(aggregated.total_projects),
           totalIssues: Number(aggregated.total_issues),
           totalResolvedIssues: Number(aggregated.total_resolved_issues),
+          // These are now medians for consistency with project-level displays
           overallAverageLeadTime: aggregated.overall_avg_lead_time ? parseFloat(aggregated.overall_avg_lead_time.toString()) : null,
           overallAverageCycleTime: aggregated.overall_avg_cycle_time ? parseFloat(aggregated.overall_avg_cycle_time.toString()) : null,
           overallFlowEfficiency: aggregated.overall_flow_efficiency ? parseFloat(aggregated.overall_flow_efficiency.toString()) : null
@@ -760,9 +761,11 @@ export const resolvers = {
 
   Mutation: {
     uploadJiraData: async (_: any, { 
+      companyId,
       data, 
       workflowMappings
     }: {
+      companyId: string;
       data: any[];
       workflowMappings?: any[];
     }) => {
@@ -865,20 +868,31 @@ export const resolvers = {
 
           // Process each project
           for (const [projectKey, projectData] of projectsMap) {
-            // Check if project exists before upsert
+            // Check if project exists in this company before upsert
             const existingProject = await tx.project.findUnique({
-              where: { key: projectKey }
+              where: { 
+                projects_company_key_unique: {
+                  companyId,
+                  key: projectKey
+                }
+              }
             });
             
             const isNewProject = !existingProject;
             
             // Create or update project
             const project = await tx.project.upsert({
-              where: { key: projectKey },
+              where: { 
+                projects_company_key_unique: {
+                  companyId,
+                  key: projectKey
+                }
+              },
               update: { name: projectData.name },
               create: {
                 key: projectKey,
-                name: projectData.name
+                name: projectData.name,
+                companyId
               }
             });
             
@@ -896,6 +910,7 @@ export const resolvers = {
             
             const mappingData = finalWorkflowMappings.map(mapping => ({
               projectId: project.id,
+              companyId,
               jiraStatusName: mapping.jiraStatusName,
               canonicalStage: mapping.canonicalStage
             }));
@@ -918,6 +933,7 @@ export const resolvers = {
                 // Find existing sprint first
                 let sprint = await tx.sprint.findFirst({
                   where: {
+                    companyId,
                     projectId: project.id,
                     name: sprintInfo.name
                   }
@@ -931,7 +947,8 @@ export const resolvers = {
                       name: sprintInfo.name,
                       startDate: sprintInfo.startDate ? new Date(sprintInfo.startDate) : null,
                       endDate: sprintInfo.endDate ? new Date(sprintInfo.endDate) : null,
-                      projectId: project.id
+                      projectId: project.id,
+                      companyId
                     }
                   });
                   isNewSprint = true;
@@ -951,16 +968,26 @@ export const resolvers = {
               }
             }
 
-            // Check if issue exists before upsert
+            // Check if issue exists in this company before upsert
             const existingIssue = await tx.issue.findUnique({
-              where: { key: issueData.key }
+              where: { 
+                issues_company_key_unique: {
+                  companyId,
+                  key: issueData.key
+                }
+              }
             });
             
             const isNewIssue = !existingIssue;
 
             // Create or update issue
             const issue = await tx.issue.upsert({
-              where: { key: issueData.key },
+              where: { 
+                issues_company_key_unique: {
+                  companyId,
+                  key: issueData.key
+                }
+              },
               update: {
                 summary: issueData.summary,
                 issueType: issueData.issueType,
@@ -978,6 +1005,7 @@ export const resolvers = {
                 issueType: issueData.issueType,
                 priority: issueData.priority,
                 projectId: project.id,
+                companyId,
                 storyPoints: issueData.storyPoints,
                 parentKey: issueData.parentKey,
                 webUrl: issueData.webUrl,
@@ -998,6 +1026,7 @@ export const resolvers = {
               await tx.statusChange.createMany({
                 data: issueData.changelogs.map((changelog: any) => ({
                   issueId: issue.id,
+                  companyId,
                   fieldName: changelog.fieldName,
                   fromValue: changelog.fromString,
                   toValue: changelog.toString,
@@ -1049,6 +1078,121 @@ export const resolvers = {
         return true;
       } catch (error) {
         throw new GraphQLError(`Failed to delete project: ${error}`);
+      }
+    },
+
+    // Company management mutations
+    createCompany: async (_: any, { 
+      name, 
+      slug, 
+      description, 
+      logoUrl, 
+      website 
+    }: { 
+      name: string; 
+      slug: string; 
+      description?: string; 
+      logoUrl?: string; 
+      website?: string; 
+    }) => {
+      try {
+        const company = await prisma.company.create({
+          data: {
+            name,
+            slug,
+            description,
+            logoUrl,
+            website,
+            settings: {},
+            isActive: true
+          }
+        });
+        return company;
+      } catch (error: any) {
+        if (error.code === 'P2002') {
+          // Unique constraint violation
+          if (error.meta?.target?.includes('name')) {
+            throw new GraphQLError(`Company name '${name}' already exists`);
+          }
+          if (error.meta?.target?.includes('slug')) {
+            throw new GraphQLError(`Company slug '${slug}' already exists`);
+          }
+        }
+        throw new GraphQLError(`Failed to create company: ${error.message}`);
+      }
+    },
+
+    updateCompany: async (_: any, { 
+      id, 
+      name, 
+      slug, 
+      description, 
+      logoUrl, 
+      website,
+      settings 
+    }: { 
+      id: string; 
+      name?: string; 
+      slug?: string; 
+      description?: string; 
+      logoUrl?: string; 
+      website?: string;
+      settings?: any;
+    }) => {
+      try {
+        const updateData: any = {};
+        if (name !== undefined) updateData.name = name;
+        if (slug !== undefined) updateData.slug = slug;
+        if (description !== undefined) updateData.description = description;
+        if (logoUrl !== undefined) updateData.logoUrl = logoUrl;
+        if (website !== undefined) updateData.website = website;
+        if (settings !== undefined) updateData.settings = settings;
+
+        const company = await prisma.company.update({
+          where: { id },
+          data: updateData
+        });
+        return company;
+      } catch (error: any) {
+        if (error.code === 'P2002') {
+          // Unique constraint violation
+          if (error.meta?.target?.includes('name')) {
+            throw new GraphQLError(`Company name '${name}' already exists`);
+          }
+          if (error.meta?.target?.includes('slug')) {
+            throw new GraphQLError(`Company slug '${slug}' already exists`);
+          }
+        }
+        if (error.code === 'P2025') {
+          throw new GraphQLError(`Company with ID '${id}' not found`);
+        }
+        throw new GraphQLError(`Failed to update company: ${error.message}`);
+      }
+    },
+
+    deleteCompany: async (_: any, { id }: { id: string }) => {
+      try {
+        // First check if company has projects
+        const projectCount = await prisma.project.count({
+          where: { companyId: id }
+        });
+        
+        if (projectCount > 0) {
+          throw new GraphQLError(`Cannot delete company with ${projectCount} projects. Move or delete projects first.`);
+        }
+
+        await prisma.company.delete({
+          where: { id }
+        });
+        return true;
+      } catch (error: any) {
+        if (error.code === 'P2025') {
+          throw new GraphQLError(`Company with ID '${id}' not found`);
+        }
+        if (error instanceof GraphQLError) {
+          throw error;
+        }
+        throw new GraphQLError(`Failed to delete company: ${error.message}`);
       }
     }
   },

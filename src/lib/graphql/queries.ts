@@ -227,3 +227,60 @@ export const GET_DASHBOARD_DATA = gql`
     }
   }
 `;
+
+// Company mutations
+export const CREATE_COMPANY = gql`
+  ${COMPANY_BASIC_FIELDS}
+  mutation CreateCompany(
+    $name: String!
+    $slug: String!
+    $description: String
+    $logoUrl: String
+    $website: String
+  ) {
+    createCompany(
+      name: $name
+      slug: $slug
+      description: $description
+      logoUrl: $logoUrl
+      website: $website
+    ) {
+      ...CompanyBasicFields
+    }
+  }
+`;
+
+export const UPDATE_COMPANY = gql`
+  ${COMPANY_BASIC_FIELDS}
+  mutation UpdateCompany($id: ID!, $input: UpdateCompanyInput!) {
+    updateCompany(id: $id, input: $input) {
+      ...CompanyBasicFields
+    }
+  }
+`;
+
+export const DELETE_COMPANY = gql`
+  mutation DeleteCompany($id: ID!) {
+    deleteCompany(id: $id)
+  }
+`;
+
+// JIRA Upload mutation
+export const UPLOAD_JIRA_DATA = gql`
+  mutation UploadJiraData(
+    $companyId: ID!
+    $data: [JiraIssueInput!]!
+    $workflowMappings: [WorkflowMappingInput!]
+  ) {
+    uploadJiraData(
+      companyId: $companyId
+      data: $data
+      workflowMappings: $workflowMappings
+    ) {
+      success
+      message
+      issuesCreated
+      projectsCreated
+    }
+  }
+`;

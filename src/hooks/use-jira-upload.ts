@@ -13,7 +13,7 @@ interface UseJiraUploadResult {
   uploading: boolean;
   progress: UploadProgress | null;
   error: string | null;
-  uploadJiraFile: (file: File) => Promise<void>;
+  uploadJiraFile: (file: File, companyId: string) => Promise<void>;
   clearError: () => void;
 }
 
@@ -79,8 +79,8 @@ export function useJiraUpload(): UseJiraUploadResult {
     }
   });
 
-  const uploadJiraFile = async (file: File) => {
-    if (!file) return;
+  const uploadJiraFile = async (file: File, companyId: string) => {
+    if (!file || !companyId) return;
     
     setUploading(true);
     setError(null);
@@ -299,6 +299,7 @@ export function useJiraUpload(): UseJiraUploadResult {
       // Upload via GraphQL (workflow mappings will be auto-generated on backend)
       await uploadJiraDataMutation({
         variables: {
+          companyId,
           data: transformedData,
           // workflowMappings is now optional and will be auto-generated
         }

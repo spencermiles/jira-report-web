@@ -25,8 +25,8 @@ const ProjectsGraphQL: React.FC<ProjectsGraphQLProps> = ({
 
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
-    if (file) {
-      await uploadJiraFile(file);
+    if (file && defaultCompanyId) {
+      await uploadJiraFile(file, defaultCompanyId);
       // Clear the input value so the same file can be uploaded again if needed
       event.target.value = '';
     }
@@ -156,7 +156,7 @@ const ProjectsGraphQL: React.FC<ProjectsGraphQLProps> = ({
             <div className="bg-white rounded-lg shadow-sm p-4 border border-gray-200">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-gray-600">Avg Cycle Time</p>
+                  <p className="text-sm text-gray-600">Median Cycle Time</p>
                   <p className="text-2xl font-semibold text-gray-900">
                     {aggregatedMetrics.overallAverageCycleTime?.toFixed(1) || '--'} days
                   </p>
@@ -168,7 +168,7 @@ const ProjectsGraphQL: React.FC<ProjectsGraphQLProps> = ({
             <div className="bg-white rounded-lg shadow-sm p-4 border border-gray-200">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-gray-600">Avg Lead Time</p>
+                  <p className="text-sm text-gray-600">Median Lead Time</p>
                   <p className="text-2xl font-semibold text-gray-900">
                     {aggregatedMetrics.overallAverageLeadTime?.toFixed(1) || '--'} days
                   </p>

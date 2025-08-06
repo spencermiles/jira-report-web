@@ -49,7 +49,6 @@ interface AccordionState {
   sprint: boolean;
   storyPoints: boolean;
   status: boolean;
-  projectKey: boolean;
   priority: boolean;
 }
 
@@ -60,7 +59,6 @@ interface FilterSidebarProps {
     sprints: string[];
     storyPoints: (number | 'none')[];
     statuses: string[];
-    projectKeys: string[];
     priorities: string[];
     createdStartDate: string;
     createdEndDate: string;
@@ -77,7 +75,6 @@ interface FilterSidebarProps {
     sprintCounts: FilterCount[];
     storyPointCounts: FilterCount[];
     statusCounts: FilterCount[];
-    projectKeyCounts: FilterCount[];
     priorityCounts: FilterCount[];
   };
   
@@ -86,7 +83,6 @@ interface FilterSidebarProps {
   toggleSprint: (sprint: string) => void;
   toggleStoryPoint: (points: number | 'none') => void;
   toggleStatus: (status: string) => void;
-  toggleProjectKey: (projectKey: string) => void;
   togglePriority: (priority: string) => void;
   selectAllIssueTypes: () => void;
   deselectAllIssueTypes: () => void;
@@ -111,7 +107,6 @@ const FilterSidebar: React.FC<FilterSidebarProps> = ({
   toggleSprint,
   toggleStoryPoint,
   toggleStatus,
-  toggleProjectKey,
   togglePriority,
   selectAllIssueTypes,
   deselectAllIssueTypes,
@@ -125,7 +120,7 @@ const FilterSidebar: React.FC<FilterSidebarProps> = ({
   totalStoriesCount,
   hasActiveFilters
 }) => {
-  const { issueTypeCounts, sprintCounts, storyPointCounts, statusCounts, projectKeyCounts, priorityCounts } = filterCounts;
+  const { issueTypeCounts, sprintCounts, storyPointCounts, statusCounts, priorityCounts } = filterCounts;
 
   return (
     <div className="w-64 bg-gray-50 border-r border-gray-200 p-4 space-y-4 overflow-y-auto h-screen sticky top-0" style={{ minWidth: '256px' }}>
@@ -349,32 +344,6 @@ const FilterSidebar: React.FC<FilterSidebarProps> = ({
                 <span className="text-sm text-gray-700 flex-1">
                   {value === 'resolved' ? 'Resolved' : 'Unresolved'}
                 </span>
-                <span className="text-xs text-gray-500">({count})</span>
-              </label>
-            ))}
-          </div>
-        )}
-      </div>
-
-      {/* Project Key Filter */}
-      <div>
-        <AccordionHeader
-          title="Project Key"
-          isOpen={accordionStates.projectKey}
-          onClick={() => toggleAccordion('projectKey')}
-          activeCount={filters.projectKeys.length}
-        />
-        {accordionStates.projectKey && (
-          <div className="mt-3 space-y-2">
-            {projectKeyCounts.map(({ value, count }) => (
-              <label key={value} className="flex items-center space-x-2 cursor-pointer hover:bg-gray-100 p-1 rounded">
-                <input
-                  type="checkbox"
-                  checked={filters.projectKeys.includes(value as string)}
-                  onChange={() => toggleProjectKey(value as string)}
-                  className="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-                />
-                <span className="text-sm text-gray-700 flex-1">{value}</span>
                 <span className="text-xs text-gray-500">({count})</span>
               </label>
             ))}

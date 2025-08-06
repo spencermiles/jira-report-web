@@ -3,6 +3,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { AuthProvider } from "@/contexts/auth-context";
 import { ToastProvider } from "@/contexts/toast-context";
+import { CompanyProvider } from "@/contexts/company-context";
 import { ApolloWrapper } from "@/providers/apollo-provider";
 import ErrorBoundary from "@/components/common/ErrorBoundary";
 
@@ -34,9 +35,11 @@ export default function RootLayout({
         <ErrorBoundary>
           <ToastProvider>
             <AuthProvider>
-              <ApolloWrapper>
-                {children}
-              </ApolloWrapper>
+              <CompanyProvider>
+                <ApolloWrapper>
+                  {children}
+                </ApolloWrapper>
+              </CompanyProvider>
             </AuthProvider>
           </ToastProvider>
         </ErrorBoundary>

@@ -14,9 +14,32 @@ import {
 } from './error-handling';
 import { WorkflowMappingService } from '@/services/workflow-mapping.service';
 
+// Helper function to validate company access (future: check user permissions)
+async function validateCompanyAccess(companyId: string, context?: any): Promise<void> {
+  if (!companyId) {
+    throw new ValidationError('Company ID is required');
+  }
+  
+  const company = await prisma.company.findUnique({
+    where: { id: companyId, isActive: true }
+  });
+  
+  if (!company) {
+    throw new NotFoundError('Company', companyId);
+  }
+  
+  // TODO: Future - validate user has access to this company
+  // const userCompanies = await getUserCompanies(context.user.id);
+  // if (!userCompanies.includes(companyId)) {
+  //   throw new ForbiddenError('Access denied to company');
+  // }
+}
+
 // Helper function to build advanced filter clauses
-function buildIssueWhereClause(filters?: any): Prisma.IssueWhereInput {
-  const whereClause: Prisma.IssueWhereInput = {};
+function buildIssueWhereClause(companyId: string, filters?: any): Prisma.IssueWhereInput {
+  const whereClause: Prisma.IssueWhereInput = {
+    companyId // MANDATORY: All queries must be scoped to company
+  };
   
   if (!filters) return whereClause;
   
@@ -83,10 +106,12 @@ function buildIssueWhereClause(filters?: any): Prisma.IssueWhereInput {
 }
 
 // Helper function to build SQL WHERE clause for database views
-function buildViewWhereClause(filters?: any, projectIdField = 'project_id'): string {
-  const conditions: string[] = [];
+function buildViewWhereClause(companyId: string, filters?: any, projectIdField = 'project_id'): string {
+  const conditions: string[] = [
+    `company_id = '${companyId}'` // MANDATORY: All queries must be scoped to company
+  ];
   
-  if (!filters) return '';
+  if (!filters) return `WHERE ${conditions.join(' AND ')}`;
   
   if (filters.projectKeys?.length) {
     const projectKeysStr = filters.projectKeys.map((k: string) => `'${k}'`).join(',');
@@ -159,7 +184,7 @@ function buildViewWhereClause(filters?: any, projectIdField = 'project_id'): str
     conditions.push(`(summary ILIKE '%${filters.search}%' OR key ILIKE '%${filters.search}%')`);
   }
   
-  return conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+  return `WHERE ${conditions.join(' AND ')}`;
 }
 
 // Helper function to build ORDER BY clause
@@ -188,19 +213,89 @@ function buildOrderByClause(sort?: any): string {
 
 export const resolvers = {
   Query: {
-    projects: async () => {
+    // Company queries
+    companies: withErrorHandling(async (_: any, { 
+      pagination = { limit: 50, offset: 0 }, 
+      search, 
+      sortBy = 'name' 
+    }: { 
+      pagination?: any; 
+      search?: string; 
+      sortBy?: string; 
+    }) => {
+      const validatedPagination = validatePagination(pagination);
+      
+      const whereClause: Prisma.CompanyWhereInput = {
+        isActive: true
+      };
+      
+      if (search) {
+        whereClause.OR = [
+          { name: { contains: search, mode: 'insensitive' } },
+          { description: { contains: search, mode: 'insensitive' } }
+        ];
+      }
+      
+      const [companies, totalCount] = await Promise.all([
+        prisma.company.findMany({
+          where: whereClause,
+          orderBy: { [sortBy]: 'asc' },
+          take: validatedPagination.limit,
+          skip: validatedPagination.offset
+        }),
+        prisma.company.count({ where: whereClause })
+      ]);
+      
+      return {
+        companies,
+        totalCount,
+        hasNextPage: validatedPagination.offset + validatedPagination.limit < totalCount,
+        hasPreviousPage: validatedPagination.offset > 0
+      };
+    }, 'companies'),
+
+    company: withErrorHandling(async (_: any, { id, slug }: { id?: string; slug?: string }) => {
+      if (!id && !slug) {
+        throw new ValidationError('Either company ID or slug is required');
+      }
+      
+      const whereClause = id 
+        ? { id, isActive: true }
+        : { slug, isActive: true };
+      
+      const company = await prisma.company.findUnique({
+        where: whereClause
+      });
+      
+      if (!company) {
+        throw new NotFoundError('Company', id || slug || 'unknown');
+      }
+      
+      return company;
+    }, 'company'),
+
+    // Company-scoped queries
+    projects: withErrorHandling(async (_: any, { companyId }: { companyId: string }, context: any) => {
+      await validateCompanyAccess(companyId, context);
+      
       return await prisma.project.findMany({
+        where: { companyId },
         orderBy: { updatedAt: 'desc' }
       });
-    },
+    }, 'projects'),
 
-    project: withErrorHandling(async (_: any, { key }: { key: string }) => {
+    project: withErrorHandling(async (_: any, { companyId, key }: { companyId: string; key: string }, context: any) => {
+      await validateCompanyAccess(companyId, context);
+      
       if (!key || key.trim().length === 0) {
         throw new ValidationError('Project key is required', 'key');
       }
       
-      const project = await prisma.project.findUnique({
-        where: { key: key.trim() }
+      const project = await prisma.project.findFirst({
+        where: { 
+          companyId,
+          key: key.trim() 
+        }
       });
       
       if (!project) {
@@ -209,6 +304,35 @@ export const resolvers = {
       
       return project;
     }, 'project'),
+
+    projectWithIssues: withErrorHandling(async (_: any, { 
+      companyId, 
+      key, 
+      issueFilters 
+    }: { 
+      companyId: string; 
+      key: string; 
+      issueFilters?: any; 
+    }, context: any) => {
+      await validateCompanyAccess(companyId, context);
+      
+      if (!key || key.trim().length === 0) {
+        throw new ValidationError('Project key is required', 'key');
+      }
+      
+      const project = await prisma.project.findFirst({
+        where: { 
+          companyId,
+          key: key.trim() 
+        }
+      });
+      
+      if (!project) {
+        throw new NotFoundError('Project', key);
+      }
+      
+      return project;
+    }, 'projectWithIssues'),
 
     issues: withErrorHandling(async (_: any, { 
       filters, 
@@ -323,16 +447,18 @@ export const resolvers = {
     }, 'issues'),
 
     projectSummaries: async (_: any, { 
+      companyId,
       filters, 
       pagination = { limit: 50, offset: 0 }, 
       sort 
     }: { 
+      companyId: string;
       filters?: any; 
       pagination?: any; 
       sort?: any; 
     }) => {
-      // Early return optimization: check if we have any data at all
-      const hasData = await prisma.project.count();
+      // Early return optimization: check if we have any data for this company
+      const hasData = await prisma.project.count({ where: { companyId } });
       if (hasData === 0) {
         return {
           projects: [],
@@ -348,6 +474,11 @@ export const resolvers = {
         };
       }
 
+      // Build sort order
+      const orderBy = sort?.field === 'name' 
+        ? { name: sort.direction === 'ASC' ? 'asc' : 'desc' }
+        : { updatedAt: 'desc' };
+      
       const whereClause = buildViewWhereClause(filters, 'id');
       const orderClause = sort?.field === 'name' 
         ? `ORDER BY name ${sort.direction === 'ASC' ? 'ASC' : 'DESC'}`
@@ -358,6 +489,7 @@ export const resolvers = {
           id: number;
           key: string;
           name: string;
+          company_id: string;
           created_at: Date;
           updated_at: Date;
           total_issues: bigint;
@@ -370,13 +502,13 @@ export const resolvers = {
           first_time_through: number | null;
         }>>`
           SELECT 
-            p.id, p.key, p.name, p.created_at, p.updated_at,
+            p.id, p.key, p.name, p.company_id, p.created_at, p.updated_at,
             ps.total_issues, ps.resolved_issues, ps.avg_lead_time,
             ps.avg_cycle_time, ps.median_lead_time, ps.median_cycle_time, 
             ps.flow_efficiency, ps.first_time_through
           FROM projects p
           LEFT JOIN project_summary ps ON p.id = ps.id
-          ${whereClause ? Prisma.sql([whereClause.replace('project_id', 'p.id')]) : Prisma.empty}
+          WHERE p.company_id = ${companyId}
           ${Prisma.sql([orderClause])}
           LIMIT ${pagination.limit}
           OFFSET ${pagination.offset}
@@ -386,7 +518,7 @@ export const resolvers = {
           SELECT COUNT(*) as count
           FROM projects p
           LEFT JOIN project_summary ps ON p.id = ps.id
-          ${whereClause ? Prisma.sql([whereClause.replace('project_id', 'p.id')]) : Prisma.empty}
+          WHERE p.company_id = ${companyId}
         `,
         
         prisma.$queryRaw<Array<{
@@ -406,7 +538,7 @@ export const resolvers = {
             AVG(ps.flow_efficiency) as overall_flow_efficiency
           FROM projects p
           LEFT JOIN project_summary ps ON p.id = ps.id
-          ${whereClause ? Prisma.sql([whereClause.replace('project_id', 'p.id')]) : Prisma.empty}
+          WHERE p.company_id = ${companyId}
         `
       ]);
       
@@ -427,6 +559,8 @@ export const resolvers = {
           // Use median for consistency with individual project screen
           averageLeadTime: project.median_lead_time ? parseFloat(project.median_lead_time.toString()) : null,
           averageCycleTime: project.median_cycle_time ? parseFloat(project.median_cycle_time.toString()) : null,
+          medianLeadTime: project.median_lead_time ? parseFloat(project.median_lead_time.toString()) : null,
+          medianCycleTime: project.median_cycle_time ? parseFloat(project.median_cycle_time.toString()) : null,
           flowEfficiency: project.flow_efficiency ? parseFloat(project.flow_efficiency.toString()) : null,
           firstTimeThrough: project.first_time_through ? parseFloat(project.first_time_through.toString()) : null
         }
@@ -973,6 +1107,79 @@ export const resolvers = {
         include: { issue: true }
       });
       return issuesSprints.map(is => is.issue);
+    }
+  },
+
+  Company: {
+    projects: async (parent: any, { filters }: { filters?: any }) => {
+      const whereClause = buildIssueWhereClause(parent.id, filters);
+      
+      return await prisma.project.findMany({
+        where: { companyId: parent.id },
+        orderBy: { updatedAt: 'desc' }
+      });
+    },
+
+    metrics: async (parent: any) => {
+      const companyId = parent.id;
+      
+      // Get basic metrics for the company
+      const [projectCount, totalIssues, resolvedIssues] = await Promise.all([
+        prisma.project.count({
+          where: { companyId }
+        }),
+        prisma.issue.count({
+          where: { companyId }
+        }),
+        prisma.issue.count({
+          where: {
+            companyId,
+            resolved: { not: null }
+          }
+        })
+      ]);
+
+      // Calculate average lead time from resolved issues
+      const resolvedIssuesWithDates = await prisma.issue.findMany({
+        where: {
+          companyId,
+          resolved: { not: null }
+        },
+        select: {
+          created: true,
+          resolved: true
+        }
+      });
+
+      let averageLeadTime = null;
+      let averageCycleTime = null;
+      let flowEfficiency = null;
+
+      if (resolvedIssuesWithDates.length > 0) {
+        const leadTimes = resolvedIssuesWithDates.map(issue => {
+          if (issue.resolved && issue.created) {
+            return (issue.resolved.getTime() - issue.created.getTime()) / (1000 * 60 * 60 * 24); // days
+          }
+          return 0;
+        }).filter(time => time > 0);
+
+        if (leadTimes.length > 0) {
+          averageLeadTime = leadTimes.reduce((sum, time) => sum + time, 0) / leadTimes.length;
+          // For now, use lead time as cycle time approximation
+          averageCycleTime = averageLeadTime;
+          flowEfficiency = averageCycleTime / averageLeadTime;
+        }
+      }
+
+      return {
+        totalProjects: projectCount,
+        totalIssues,
+        resolvedIssues,
+        averageLeadTime,
+        averageCycleTime,
+        flowEfficiency,
+        firstTimeThrough: null // TODO: Calculate first time through rate
+      };
     }
   }
 };

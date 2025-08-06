@@ -40,8 +40,8 @@ const DefectResolutionSummaryWidget: React.FC<DefectResolutionSummaryWidgetProps
   }
 
   return (
-    <div className="bg-white rounded-lg border border-gray-200 p-4">
-      <h3 className="text-sm font-medium text-gray-900 mb-3">Defect Resolution Time</h3>
+    <div className="bg-gray-50 rounded-lg p-4">
+      <h3 className="text-sm font-medium text-gray-700 mb-1">Defect Resolution</h3>
       <div className="space-y-2">
         {defectResolutionStats.map((defectStat) => {
           const colorClasses = getPriorityColor(defectStat.priority);

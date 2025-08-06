@@ -11,11 +11,42 @@ import {
   FLOW_METRICS_TREND_FIELDS,
 } from './fragments';
 
+// Company fragments
+export const COMPANY_BASIC_FIELDS = gql`
+  fragment CompanyBasicFields on Company {
+    id
+    name
+    slug
+    description
+    logoUrl
+    website
+    isActive
+    createdAt
+    updatedAt
+  }
+`;
+
+export const COMPANY_WITH_METRICS = gql`
+  fragment CompanyWithMetrics on Company {
+    ...CompanyBasicFields
+    metrics {
+      totalProjects
+      totalIssues
+      resolvedIssues
+      averageLeadTime
+      averageCycleTime
+      flowEfficiency
+      firstTimeThrough
+    }
+  }
+  ${COMPANY_BASIC_FIELDS}
+`;
+
 // Projects queries
 export const GET_PROJECTS = gql`
   ${PROJECT_WITH_METRICS}
-  query GetProjects {
-    projects {
+  query GetProjects($companyId: ID!) {
+    projects(companyId: $companyId) {
       ...ProjectWithMetrics
     }
   }
@@ -25,11 +56,12 @@ export const GET_PROJECT_SUMMARIES = gql`
   ${PROJECT_SUMMARY_FIELDS}
   ${AGGREGATED_METRICS_FIELDS}
   query GetProjectSummaries(
+    $companyId: ID!
     $filters: IssueFilters
     $pagination: PaginationInput
     $sort: SortInput
   ) {
-    projectSummaries(filters: $filters, pagination: $pagination, sort: $sort) {
+    projectSummaries(companyId: $companyId, filters: $filters, pagination: $pagination, sort: $sort) {
       projects {
         ...ProjectSummaryFields
       }
@@ -45,8 +77,8 @@ export const GET_PROJECT = gql`
   ${PROJECT_WITH_METRICS}
   ${SPRINT_FIELDS}
   ${WORKFLOW_MAPPING_FIELDS}
-  query GetProject($key: String!) {
-    project(key: $key) {
+  query GetProject($companyId: ID!, $key: String!) {
+    project(companyId: $companyId, key: $key) {
       ...ProjectWithMetrics
       sprints {
         ...SprintFields
@@ -63,8 +95,8 @@ export const GET_PROJECT_WITH_ISSUES = gql`
   ${ISSUE_WITH_METRICS}
   ${SPRINT_FIELDS}
   ${WORKFLOW_MAPPING_FIELDS}
-  query GetProjectWithIssues($key: String!, $issueFilters: IssueFilters) {
-    project(key: $key) {
+  query GetProjectWithIssues($companyId: ID!, $key: String!, $issueFilters: IssueFilters) {
+    project(companyId: $companyId, key: $key) {
       ...ProjectWithMetrics
       issues(filters: $issueFilters) {
         ...IssueWithMetrics
@@ -83,11 +115,12 @@ export const GET_PROJECT_WITH_ISSUES = gql`
 export const GET_ISSUES = gql`
   ${ISSUE_WITH_METRICS}
   query GetIssues(
+    $companyId: ID!
     $filters: IssueFilters
     $pagination: PaginationInput
     $sort: SortInput
   ) {
-    issues(filters: $filters, pagination: $pagination, sort: $sort) {
+    issues(companyId: $companyId, filters: $filters, pagination: $pagination, sort: $sort) {
       issues {
         ...IssueWithMetrics
       }
@@ -100,8 +133,8 @@ export const GET_ISSUES = gql`
 
 export const GET_ISSUE = gql`
   ${ISSUE_FULL}
-  query GetIssue($key: String!) {
-    issue(key: $key) {
+  query GetIssue($companyId: ID!, $key: String!) {
+    issue(companyId: $companyId, key: $key) {
       ...IssueFull
     }
   }
@@ -138,17 +171,46 @@ export const GET_FLOW_METRICS_TREND = gql`
 `;
 
 // Combined queries for dashboard views
+// Company queries
+export const GET_COMPANIES = gql`
+  ${COMPANY_WITH_METRICS}
+  query GetCompanies(
+    $pagination: PaginationInput
+    $search: String
+    $sortBy: String
+  ) {
+    companies(pagination: $pagination, search: $search, sortBy: $sortBy) {
+      companies {
+        ...CompanyWithMetrics
+      }
+      totalCount
+      hasNextPage
+      hasPreviousPage
+    }
+  }
+`;
+
+export const GET_COMPANY = gql`
+  ${COMPANY_WITH_METRICS}
+  query GetCompany($slug: String!) {
+    company(slug: $slug) {
+      ...CompanyWithMetrics
+    }
+  }
+`;
+
 export const GET_DASHBOARD_DATA = gql`
   ${PROJECT_SUMMARY_FIELDS}
   ${AGGREGATED_METRICS_FIELDS}
   ${CYCLE_TIME_DISTRIBUTION_FIELDS}
   ${FLOW_METRICS_TREND_FIELDS}
   query GetDashboardData(
+    $companyId: ID!
     $projectFilters: IssueFilters
     $pagination: PaginationInput
     $trendPeriod: String!
   ) {
-    projectSummaries(filters: $projectFilters, pagination: $pagination) {
+    projectSummaries(companyId: $companyId, filters: $projectFilters, pagination: $pagination) {
       projects {
         ...ProjectSummaryFields
       }
@@ -157,10 +219,10 @@ export const GET_DASHBOARD_DATA = gql`
         ...AggregatedMetricsFields
       }
     }
-    cycleTimeDistribution(filters: $projectFilters) {
+    cycleTimeDistribution(companyId: $companyId, filters: $projectFilters) {
       ...CycleTimeDistributionFields
     }
-    flowMetricsTrend(period: $trendPeriod, filters: $projectFilters) {
+    flowMetricsTrend(companyId: $companyId, period: $trendPeriod, filters: $projectFilters) {
       ...FlowMetricsTrendFields
     }
   }

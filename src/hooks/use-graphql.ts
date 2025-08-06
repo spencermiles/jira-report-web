@@ -49,11 +49,16 @@ export interface SortInput {
 }
 
 // Projects hooks
-export function useProjects(options?: QueryHookOptions) {
-  return useQuery(GET_PROJECTS, options);
+export function useProjects(companyId: string, options?: QueryHookOptions) {
+  return useQuery(GET_PROJECTS, {
+    ...options,
+    variables: { companyId },
+    skip: !companyId || options?.skip,
+  });
 }
 
 export function useProjectSummaries(
+  companyId: string,
   filters?: IssueFilters,
   pagination?: PaginationInput,
   sort?: SortInput,
@@ -62,30 +67,33 @@ export function useProjectSummaries(
   return useQuery(GET_PROJECT_SUMMARIES, {
     ...options,
     variables: {
+      companyId,
       filters,
       pagination: pagination || { limit: 50, offset: 0 },
       sort,
     },
+    skip: !companyId || options?.skip,
   });
 }
 
-export function useProject(key: string, options?: QueryHookOptions) {
+export function useProject(companyId: string, key: string, options?: QueryHookOptions) {
   return useQuery(GET_PROJECT, {
     ...options,
-    variables: { key },
-    skip: !key || options?.skip,
+    variables: { companyId, key },
+    skip: !companyId || !key || options?.skip,
   });
 }
 
 export function useProjectWithIssues(
+  companyId: string,
   key: string,
   issueFilters?: IssueFilters,
   options?: QueryHookOptions
 ) {
   return useQuery(GET_PROJECT_WITH_ISSUES, {
     ...options,
-    variables: { key, issueFilters },
-    skip: !key || options?.skip,
+    variables: { companyId, key, issueFilters },
+    skip: !companyId || !key || options?.skip,
   });
 }
 

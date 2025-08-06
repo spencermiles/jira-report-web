@@ -4,10 +4,41 @@ export const typeDefs = gql`
   scalar DateTime
   scalar JSON
 
+  type Company {
+    id: ID!
+    name: String!
+    slug: String!
+    description: String
+    logoUrl: String
+    website: String
+    projects(filters: IssueFilters): [Project!]!
+    projectCount: Int!
+    issueCount: Int!
+    activeProjects: Int!
+    lastActivity: DateTime
+    settings: JSON!
+    isActive: Boolean!
+    createdAt: DateTime!
+    updatedAt: DateTime!
+    metrics: CompanyMetrics!
+  }
+
+  type CompanyMetrics {
+    totalProjects: Int!
+    totalIssues: Int!
+    resolvedIssues: Int!
+    averageLeadTime: Float
+    averageCycleTime: Float
+    flowEfficiency: Float
+    firstTimeThrough: Float
+  }
+
   type Project {
     id: ID!
     key: String!
     name: String!
+    company: Company!
+    companyId: ID!
     issues(filters: IssueFilters): [Issue!]!
     metrics: ProjectMetrics!
     sprints: [Sprint!]!
@@ -19,6 +50,7 @@ export const typeDefs = gql`
   type WorkflowMapping {
     id: ID!
     projectId: Int!
+    companyId: ID!
     jiraStatusName: String!
     canonicalStage: String!
   }
@@ -29,7 +61,9 @@ export const typeDefs = gql`
     startDate: DateTime
     endDate: DateTime
     projectId: Int!
+    companyId: ID!
     project: Project!
+    company: Company!
     issues: [Issue!]!
     createdAt: DateTime!
   }
@@ -42,6 +76,8 @@ export const typeDefs = gql`
     issueType: String!
     priority: String
     project: Project!
+    company: Company!
+    companyId: ID!
     storyPoints: Int
     parentKey: String
     webUrl: String
@@ -157,6 +193,20 @@ export const typeDefs = gql`
     overallFlowEfficiency: Float
   }
 
+  type CompaniesResponse {
+    companies: [Company!]!
+    totalCount: Int!
+    hasNextPage: Boolean!
+    hasPreviousPage: Boolean!
+  }
+
+  type DashboardDataResponse {
+    projects: [ProjectWithSummary!]!
+    aggregatedMetrics: AggregatedMetrics!
+    flowMetricsTrend: [FlowMetricsTrendPoint!]!
+    totalCount: Int!
+  }
+
   input JiraIssueInput {
     jiraId: String!
     key: String!
@@ -201,29 +251,50 @@ export const typeDefs = gql`
   }
 
   type Query {
-    projects: [Project!]!
-    project(key: String!): Project
+    # Company queries
+    companies(
+      pagination: PaginationInput
+      search: String
+      sortBy: String
+    ): CompaniesResponse!
+    company(id: ID, slug: String): Company
+    
+    # Company-scoped queries (require companyId)
+    projects(companyId: ID!): [Project!]!
+    project(companyId: ID!, key: String!): Project
+    projectWithIssues(companyId: ID!, key: String!, issueFilters: IssueFilters): Project
     projectSummaries(
+      companyId: ID!
       filters: IssueFilters
       pagination: PaginationInput
       sort: SortInput
     ): ProjectSummaryResponse!
     issues(
+      companyId: ID!
       filters: IssueFilters
       pagination: PaginationInput
       sort: SortInput
     ): IssuesResponse!
-    issue(key: String!): Issue
-    # Advanced analytics queries
+    issue(companyId: ID!, key: String!): Issue
+    
+    # Advanced analytics queries (company-scoped)
     cycleTimeDistribution(
+      companyId: ID!
       projectKeys: [String!]
       filters: IssueFilters
     ): [CycleTimeDistributionBucket!]!
     flowMetricsTrend(
+      companyId: ID!
       projectKeys: [String!]
       period: String! # "week", "month", "quarter"
       filters: IssueFilters
     ): [FlowMetricsTrendPoint!]!
+    dashboardData(
+      companyId: ID!
+      projectFilters: IssueFilters
+      pagination: PaginationInput
+      trendPeriod: String
+    ): DashboardDataResponse!
   }
 
   type CycleTimeDistributionBucket {
@@ -242,10 +313,31 @@ export const typeDefs = gql`
   }
 
   type Mutation {
+    # Company management
+    createCompany(
+      name: String!
+      slug: String!
+      description: String
+      logoUrl: String
+      website: String
+    ): Company!
+    updateCompany(
+      id: ID!
+      name: String
+      slug: String
+      description: String
+      logoUrl: String
+      website: String
+      settings: JSON
+    ): Company!
+    deleteCompany(id: ID!): Boolean!
+    
+    # Company-scoped mutations
     uploadJiraData(
+      companyId: ID!
       data: [JiraIssueInput!]!
       workflowMappings: [WorkflowMappingInput!]
     ): UploadResult!
-    deleteProject(id: ID!): Boolean!
+    deleteProject(companyId: ID!, id: ID!): Boolean!
   }
 `;

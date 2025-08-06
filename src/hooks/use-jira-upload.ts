@@ -184,7 +184,7 @@ export function useJiraUpload(): UseJiraUploadResult {
       });
 
       // Transform JIRA data to GraphQL input format
-      const transformedData = data.map((issue: any) => {
+      const transformedData = data.map((issue: any, index: number) => {
         // Extract project information with fallbacks
         let projectKey: string;
         let projectName: string;
@@ -263,12 +263,21 @@ export function useJiraUpload(): UseJiraUploadResult {
           });
         }
 
+        // Debug priority extraction
+        const priorityValue = issue.fields?.priority?.name || issue.fields?.priority || issue.priority || null;
+        if (index === 0) { // Log first issue for debugging
+          console.log('Priority debug for first issue:');
+          console.log('  issue.fields?.priority:', JSON.stringify(issue.fields?.priority));
+          console.log('  issue.priority:', issue.priority);
+          console.log('  Extracted priority:', priorityValue);
+        }
+
         return {
           jiraId: issue.id || issue.key || `UNKNOWN-${Math.random().toString(36).substr(2, 9)}`,
           key: issue.key || `UNKNOWN-${Math.random().toString(36).substr(2, 9)}`,
           summary: issue.fields?.summary || issue.summary || '',
           issueType: issue.fields?.issuetype?.name || issue.issue_type || issue.issueType || issue.type || 'Unknown',
-          priority: issue.fields?.priority?.name || issue.priority || null,
+          priority: priorityValue,
           projectKey,
           storyPoints: getStoryPoints(),
           parentKey: issue.fields?.parent?.key || issue.parent?.key || null,

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { FileText, AlertCircle, ArrowLeft } from 'lucide-react';
 import { 
@@ -29,6 +29,7 @@ ChartJS.register(
 
 // GraphQL Hooks
 import { useProjectWithIssues, useFilters } from '@/hooks/use-graphql';
+import { useDefaultCompanyId } from '@/hooks/use-default-company';
 
 // Components
 import FilterSidebar from './ui/FilterSidebar';
@@ -52,7 +53,6 @@ interface AccordionState {
   sprint: boolean;
   storyPoints: boolean;
   status: boolean;
-  projectKey: boolean;
   priority: boolean;
 }
 
@@ -62,12 +62,18 @@ import { FilterSidebarSkeleton, IssuesTableSkeleton } from '@/components/common/
 
 interface JiraIssueReportGraphQLProps {
   preselectedProjectKey?: string;
+  companyId?: string;
 }
 
 const JiraIssueReportGraphQL: React.FC<JiraIssueReportGraphQLProps> = ({ 
-  preselectedProjectKey 
+  preselectedProjectKey,
+  companyId
 }) => {
   const [activeTab, setActiveTab] = useState<'metrics' | 'issues' | 'charts'>('metrics');
+
+  // Fallback to default company if no companyId is provided (backward compatibility)
+  const defaultCompanyId = useDefaultCompanyId();
+  const effectiveCompanyId = companyId || defaultCompanyId;
 
   // Accordion state management for FilterSidebar
   const [accordionStates, setAccordionStates] = useState<AccordionState>({
@@ -77,7 +83,6 @@ const JiraIssueReportGraphQL: React.FC<JiraIssueReportGraphQLProps> = ({
     sprint: false,
     storyPoints: false,
     status: false,
-    projectKey: false,
     priority: false,
   });
 
@@ -88,10 +93,11 @@ const JiraIssueReportGraphQL: React.FC<JiraIssueReportGraphQLProps> = ({
 
   // Fetch project data with issues using GraphQL
   const { loading, error, data, refetch } = useProjectWithIssues(
+    effectiveCompanyId || '',
     preselectedProjectKey || '',
     filters,
     {
-      skip: !preselectedProjectKey, // Skip if no project key provided
+      skip: !effectiveCompanyId || !preselectedProjectKey, // Skip if no company ID or project key provided
       fetchPolicy: 'cache-and-network',
     }
   );
@@ -99,10 +105,21 @@ const JiraIssueReportGraphQL: React.FC<JiraIssueReportGraphQLProps> = ({
   const project = data?.project as GraphQLProject | undefined;
   const issues = (project?.issues || []) as GraphQLIssue[];
 
+  // Initialize all issue types as selected when data loads
+  useEffect(() => {
+    if (issues.length > 0 && (!filters.issueTypes || filters.issueTypes.length === 0)) {
+      // Get all unique issue types from the loaded issues
+      const allIssueTypes = [...new Set(issues.map(issue => issue.issueType))];
+      updateFilter('issueTypes', allIssueTypes);
+    }
+  }, [issues.length]); // Only run when issues are first loaded
+
   // Handler for viewing defect issues by priority
   const handleViewDefectIssues = (priority: string) => {
-    // Clear all current filters and set priority filter
+    // Clear all filters but keep all issue types selected
+    const allIssueTypes = [...new Set(issues.map(issue => issue.issueType))];
     clearFilters();
+    updateFilter('issueTypes', allIssueTypes);
     // Set the priority filter after clearing
     setTimeout(() => {
       toggleArrayFilter('priorities', priority);
@@ -127,7 +144,6 @@ const JiraIssueReportGraphQL: React.FC<JiraIssueReportGraphQLProps> = ({
         sprintCounts: [],
         storyPointCounts: [],
         statusCounts: [],
-        projectKeyCounts: [],
         priorityCounts: [],
       };
     }
@@ -136,7 +152,6 @@ const JiraIssueReportGraphQL: React.FC<JiraIssueReportGraphQLProps> = ({
       issueTypes: {} as Record<string, number>,
       priorities: {} as Record<string, number>,
       statuses: {} as Record<string, number>,
-      projectKeys: {} as Record<string, number>,
       sprints: {} as Record<string, number>,
       storyPoints: {} as Record<string | number, number>,
     };
@@ -153,9 +168,6 @@ const JiraIssueReportGraphQL: React.FC<JiraIssueReportGraphQLProps> = ({
       // Count statuses
       counts.statuses[issue.status] = (counts.statuses[issue.status] || 0) + 1;
 
-      // Count project keys
-      counts.projectKeys[issue.projectKey] = (counts.projectKeys[issue.projectKey] || 0) + 1;
-
       // Count sprints
       if (issue.sprint) {
         counts.sprints[issue.sprint] = (counts.sprints[issue.sprint] || 0) + 1;
@@ -171,7 +183,6 @@ const JiraIssueReportGraphQL: React.FC<JiraIssueReportGraphQLProps> = ({
       issueTypeCounts: Object.entries(counts.issueTypes).map(([value, count]) => ({ value, count })),
       priorityCounts: Object.entries(counts.priorities).map(([value, count]) => ({ value, count })),
       statusCounts: Object.entries(counts.statuses).map(([value, count]) => ({ value, count })),
-      projectKeyCounts: Object.entries(counts.projectKeys).map(([value, count]) => ({ value, count })),
       sprintCounts: Object.entries(counts.sprints).map(([value, count]) => ({ value, count })),
       storyPointCounts: Object.entries(counts.storyPoints).map(([value, count]) => ({ 
         value: value === 'none' ? 'none' as const : Number(value), 
@@ -429,7 +440,6 @@ const JiraIssueReportGraphQL: React.FC<JiraIssueReportGraphQLProps> = ({
             issueTypes: filters.issueTypes || [],
             priorities: filters.priorities || [],
             statuses: filters.statuses || [],
-            projectKeys: filters.projectKeys || [],
             sprints: filters.sprints || [],
             storyPoints: filters.storyPoints || [],
             createdStartDate: filters.createdAfter || '',
@@ -443,7 +453,6 @@ const JiraIssueReportGraphQL: React.FC<JiraIssueReportGraphQLProps> = ({
           toggleSprint={(sprint) => toggleArrayFilter('sprints', sprint)}
           toggleStoryPoint={(points) => toggleArrayFilter('storyPoints', points)}
           toggleStatus={(status) => toggleArrayFilter('statuses', status)}
-          toggleProjectKey={(key) => toggleArrayFilter('projectKeys', key)}
           togglePriority={(priority) => toggleArrayFilter('priorities', priority)}
           selectAllIssueTypes={() => {
             const allTypes = filterCounts.issueTypeCounts.map(item => item.value);
@@ -454,13 +463,32 @@ const JiraIssueReportGraphQL: React.FC<JiraIssueReportGraphQLProps> = ({
           setCreatedEndDate={(date) => updateFilter('createdBefore', date)}
           setResolvedStartDate={(date) => updateFilter('resolvedAfter', date)}
           setResolvedEndDate={(date) => updateFilter('resolvedBefore', date)}
-          clearAllFilters={clearFilters}
+          clearAllFilters={() => {
+            // Clear all filters but keep all issue types selected
+            const allTypes = filterCounts.issueTypeCounts.map(item => item.value);
+            clearFilters();
+            updateFilter('issueTypes', allTypes);
+          }}
           toggleAccordion={toggleAccordion}
           filteredStoriesCount={issues.length}
           totalStoriesCount={issues.length}
-          hasActiveFilters={Object.values(filters).some(v => 
-            Array.isArray(v) ? v.length > 0 : Boolean(v)
-          )}
+          hasActiveFilters={(() => {
+            // Check if any filters are active, but don't count issue types if all are selected
+            const allIssueTypes = filterCounts.issueTypeCounts.map(item => item.value);
+            const hasIssueTypeFilter = filters.issueTypes && 
+              filters.issueTypes.length > 0 && 
+              filters.issueTypes.length !== allIssueTypes.length;
+            
+            return hasIssueTypeFilter ||
+              (filters.priorities && filters.priorities.length > 0) ||
+              (filters.statuses && filters.statuses.length > 0) ||
+              (filters.sprints && filters.sprints.length > 0) ||
+              (filters.storyPoints && filters.storyPoints.length > 0) ||
+              Boolean(filters.createdAfter) ||
+              Boolean(filters.createdBefore) ||
+              Boolean(filters.resolvedAfter) ||
+              Boolean(filters.resolvedBefore);
+          })()}
         />
         ) : null}
         
@@ -577,12 +605,31 @@ const JiraIssueReportGraphQL: React.FC<JiraIssueReportGraphQLProps> = ({
                 <IssuesTab
                   filteredStories={sortedStories}
                   totalStoriesCount={issues.length}
-                  hasActiveFilters={Object.values(filters).some(v => 
-                    Array.isArray(v) ? v.length > 0 : Boolean(v)
-                  )}
+                  hasActiveFilters={(() => {
+                    // Check if any filters are active, but don't count issue types if all are selected
+                    const allIssueTypes = filterCounts.issueTypeCounts.map(item => item.value);
+                    const hasIssueTypeFilter = filters.issueTypes && 
+                      filters.issueTypes.length > 0 && 
+                      filters.issueTypes.length !== allIssueTypes.length;
+                    
+                    return hasIssueTypeFilter ||
+                      (filters.priorities && filters.priorities.length > 0) ||
+                      (filters.statuses && filters.statuses.length > 0) ||
+                      (filters.sprints && filters.sprints.length > 0) ||
+                      (filters.storyPoints && filters.storyPoints.length > 0) ||
+                      Boolean(filters.createdAfter) ||
+                      Boolean(filters.createdBefore) ||
+                      Boolean(filters.resolvedAfter) ||
+                      Boolean(filters.resolvedBefore);
+                  })()}
                   sortConfig={sortConfig}
                   sortStories={sortStories}
-                  clearAllFilters={clearFilters}
+                  clearAllFilters={() => {
+                    // Clear all filters but keep all issue types selected
+                    const allTypes = filterCounts.issueTypeCounts.map(item => item.value);
+                    clearFilters();
+                    updateFilter('issueTypes', allTypes);
+                  }}
                 />
               )}
 

@@ -94,9 +94,9 @@ model Issue {
 model StatusChange {
   id        Int      @id @default(autoincrement())
   issueId   Int      @map("issue_id")
-  fieldName String   @map("field_name") @db.VarChar(50)
-  fromValue String?  @map("from_value") @db.VarChar(200)
-  toValue   String?  @map("to_value") @db.VarChar(200)
+  fieldName String   @map("field_name") @db.VarChar(255)
+  fromValue String?  @map("from_value") @db.Text
+  toValue   String?  @map("to_value") @db.Text
   changed   DateTime @db.Timestamptz // When the change occurred in JIRA
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
 
@@ -106,7 +106,7 @@ model StatusChange {
   @@index([issueId])
   @@index([fieldName])
   @@index([changed])
-  @@index([fieldName, toValue]) // For workflow lookups
+  // Note: Composite index with toValue is handled by raw SQL due to TEXT column size limits
   @@map("status_changes")
 }
 

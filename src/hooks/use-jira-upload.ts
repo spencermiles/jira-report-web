@@ -223,18 +223,31 @@ export function useJiraUpload(): UseJiraUploadResult {
 
         // Transform changelog entries to match GraphQL schema
         const changelogs: any[] = [];
+        
+        // Handle standard JIRA API format (issue.changelog.histories)
         if (issue.changelog?.histories) {
           issue.changelog.histories.forEach((history: any) => {
             if (history.items) {
               history.items.forEach((item: any) => {
                 changelogs.push({
-                  fieldName: item.field,
-                  fromString: item.fromString || null,
-                  toString: item.toString || null,
+                  fieldName: item.field || 'unknown',
+                  fromString: item.fromString,
+                  toString: item.toString,
                   created: history.created,
                 });
               });
             }
+          });
+        }
+        // Handle user's data format (issue.changelogs as direct array)
+        else if (issue.changelogs && Array.isArray(issue.changelogs)) {
+          issue.changelogs.forEach((changelog: any) => {
+            changelogs.push({
+              fieldName: changelog.field_name || 'unknown',
+              fromString: changelog.from_string,
+              toString: changelog.to_string,
+              created: changelog.created,
+            });
           });
         }
 
@@ -269,11 +282,11 @@ export function useJiraUpload(): UseJiraUploadResult {
 
       // Basic workflow mappings (can be enhanced later)
       const workflowMappings = [
-        { jiraStatusName: 'To Do', canonicalStage: 'backlog' },
-        { jiraStatusName: 'In Progress', canonicalStage: 'in_progress' },
-        { jiraStatusName: 'In Review', canonicalStage: 'review' },
-        { jiraStatusName: 'Done', canonicalStage: 'done' },
-        { jiraStatusName: 'Closed', canonicalStage: 'done' },
+        { jiraStatusName: 'To Do', canonicalStage: 'BACKLOG' },
+        { jiraStatusName: 'In Progress', canonicalStage: 'IN_PROGRESS' },
+        { jiraStatusName: 'In Review', canonicalStage: 'IN_REVIEW' },
+        { jiraStatusName: 'Done', canonicalStage: 'DONE' },
+        { jiraStatusName: 'Closed', canonicalStage: 'DONE' },
       ];
 
       setProgress({

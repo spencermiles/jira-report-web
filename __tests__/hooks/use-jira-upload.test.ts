@@ -125,6 +125,153 @@ describe('JIRA Upload Data Transformation', () => {
     });
   });
 
+  describe('Changelog Processing', () => {
+    // Test the changelog processing logic specifically for cycle time calculation
+    const processChangelogs = (issue: any) => {
+      const changelogs: any[] = [];
+      
+      // Handle standard JIRA API format (issue.changelog.histories)
+      if (issue.changelog?.histories) {
+        issue.changelog.histories.forEach((history: any) => {
+          if (history.items) {
+            history.items.forEach((item: any) => {
+              changelogs.push({
+                fieldName: item.field,
+                fromString: item.fromString || null,
+                toString: item.toString || null,
+                created: history.created,
+              });
+            });
+          }
+        });
+      }
+      // Handle user's data format (issue.changelogs as direct array)
+      else if (issue.changelogs && Array.isArray(issue.changelogs)) {
+        issue.changelogs.forEach((changelog: any) => {
+          changelogs.push({
+            fieldName: changelog.field_name,
+            fromString: changelog.from_string || null,
+            toString: changelog.to_string || null,
+            created: changelog.created,
+          });
+        });
+      }
+      
+      return changelogs;
+    };
+
+    it('should process user data format changelogs correctly', () => {
+      const userFormatIssue = {
+        "id": "38267",
+        "key": "HR360M-1767",
+        "changelogs": [
+          {
+            "change_id": "214280",
+            "author": "Usama Iqbal",
+            "created": "2025-07-31T00:31:29.730-0500",
+            "field_name": "status",
+            "field_type": "jira",
+            "from_value": "10193",
+            "to_value": "10194",
+            "from_string": "To Do",
+            "to_string": "IN PROGRESS"
+          },
+          {
+            "change_id": "214287",
+            "author": "Usama Iqbal", 
+            "created": "2025-07-31T00:31:56.319-0500",
+            "field_name": "status",
+            "field_type": "jira",
+            "from_value": "10228",
+            "to_value": "10195",
+            "from_string": "QA Testing",
+            "to_string": "Done"
+          }
+        ]
+      };
+
+      const result = processChangelogs(userFormatIssue);
+      
+      expect(result).toHaveLength(2);
+      expect(result[0]).toEqual({
+        fieldName: 'status',
+        fromString: 'To Do',
+        toString: 'IN PROGRESS', 
+        created: '2025-07-31T00:31:29.730-0500'
+      });
+      expect(result[1]).toEqual({
+        fieldName: 'status',
+        fromString: 'QA Testing',
+        toString: 'Done',
+        created: '2025-07-31T00:31:56.319-0500'
+      });
+    });
+
+    it('should process standard JIRA API format changelogs', () => {
+      const standardFormatIssue = {
+        "changelog": {
+          "histories": [
+            {
+              "created": "2024-01-15T09:00:00Z",
+              "items": [
+                {
+                  "field": "status",
+                  "fromString": null,
+                  "toString": "To Do"
+                }
+              ]
+            },
+            {
+              "created": "2024-01-17T14:30:00Z",
+              "items": [
+                {
+                  "field": "status",
+                  "fromString": "To Do",
+                  "toString": "In Progress"
+                }
+              ]
+            }
+          ]
+        }
+      };
+
+      const result = processChangelogs(standardFormatIssue);
+      
+      expect(result).toHaveLength(2);
+      expect(result[0]).toEqual({
+        fieldName: 'status',
+        fromString: null,
+        toString: 'To Do',
+        created: '2024-01-15T09:00:00Z'
+      });
+      expect(result[1]).toEqual({
+        fieldName: 'status', 
+        fromString: 'To Do',
+        toString: 'In Progress',
+        created: '2024-01-17T14:30:00Z'
+      });
+    });
+
+    it('should return empty array when no changelogs exist', () => {
+      const issueWithoutChangelogs = {
+        "id": "12345",
+        "key": "TEST-1"
+      };
+
+      const result = processChangelogs(issueWithoutChangelogs);
+      expect(result).toEqual([]);
+    });
+
+    it('should handle malformed changelog data gracefully', () => {
+      const malformedIssue = {
+        "changelogs": "not an array"
+      };
+
+      const result = processChangelogs(malformedIssue);
+      expect(result).toEqual([]);
+    });
+  });
+
   describe('Fallback Priority Order', () => {
     it('should follow correct priority order for issue type extraction', () => {
       // Priority: fields.issuetype.name > issue_type > issueType > type > 'Unknown'

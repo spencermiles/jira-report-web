@@ -4,7 +4,7 @@ import { gql } from '@apollo/client';
 export const UPLOAD_JIRA_DATA = gql`
   mutation UploadJiraData(
     $data: [JiraIssueInput!]!
-    $workflowMappings: [WorkflowMappingInput!]!
+    $workflowMappings: [WorkflowMappingInput!]
   ) {
     uploadJiraData(
       data: $data

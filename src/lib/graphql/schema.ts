@@ -244,7 +244,7 @@ export const typeDefs = gql`
   type Mutation {
     uploadJiraData(
       data: [JiraIssueInput!]!
-      workflowMappings: [WorkflowMappingInput!]!
+      workflowMappings: [WorkflowMappingInput!]
     ): UploadResult!
     deleteProject(id: ID!): Boolean!
   }

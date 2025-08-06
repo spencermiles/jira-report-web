@@ -12,6 +12,7 @@ import {
   PerformanceMonitor,
   RateLimiter 
 } from './error-handling';
+import { WorkflowMappingService } from '@/services/workflow-mapping.service';
 
 // Helper function to build advanced filter clauses
 function buildIssueWhereClause(filters?: any): Prisma.IssueWhereInput {
@@ -330,6 +331,23 @@ export const resolvers = {
       pagination?: any; 
       sort?: any; 
     }) => {
+      // Early return optimization: check if we have any data at all
+      const hasData = await prisma.project.count();
+      if (hasData === 0) {
+        return {
+          projects: [],
+          totalCount: 0,
+          aggregatedMetrics: {
+            totalProjects: 0,
+            totalIssues: 0,
+            totalResolvedIssues: 0,
+            overallAverageLeadTime: null,
+            overallAverageCycleTime: null,
+            overallFlowEfficiency: null
+          }
+        };
+      }
+
       const whereClause = buildViewWhereClause(filters, 'id');
       const orderClause = sort?.field === 'name' 
         ? `ORDER BY name ${sort.direction === 'ASC' ? 'ASC' : 'DESC'}`
@@ -346,13 +364,16 @@ export const resolvers = {
           resolved_issues: bigint;
           avg_lead_time: number | null;
           avg_cycle_time: number | null;
+          median_lead_time: number | null;
+          median_cycle_time: number | null;
           flow_efficiency: number | null;
           first_time_through: number | null;
         }>>`
           SELECT 
             p.id, p.key, p.name, p.created_at, p.updated_at,
             ps.total_issues, ps.resolved_issues, ps.avg_lead_time,
-            ps.avg_cycle_time, ps.flow_efficiency, ps.first_time_through
+            ps.avg_cycle_time, ps.median_lead_time, ps.median_cycle_time, 
+            ps.flow_efficiency, ps.first_time_through
           FROM projects p
           LEFT JOIN project_summary ps ON p.id = ps.id
           ${whereClause ? Prisma.sql([whereClause.replace('project_id', 'p.id')]) : Prisma.empty}
@@ -403,8 +424,9 @@ export const resolvers = {
         metrics: {
           totalIssues: Number(project.total_issues || 0),
           resolvedIssues: Number(project.resolved_issues || 0),
-          averageLeadTime: project.avg_lead_time ? parseFloat(project.avg_lead_time.toString()) : null,
-          averageCycleTime: project.avg_cycle_time ? parseFloat(project.avg_cycle_time.toString()) : null,
+          // Use median for consistency with individual project screen
+          averageLeadTime: project.median_lead_time ? parseFloat(project.median_lead_time.toString()) : null,
+          averageCycleTime: project.median_cycle_time ? parseFloat(project.median_cycle_time.toString()) : null,
           flowEfficiency: project.flow_efficiency ? parseFloat(project.flow_efficiency.toString()) : null,
           firstTimeThrough: project.first_time_through ? parseFloat(project.first_time_through.toString()) : null
         }
@@ -447,6 +469,14 @@ export const resolvers = {
       projectKeys?: string[]; 
       filters?: any; 
     }) => {
+      // Early return optimization: check if we have any data at all
+      const hasData = await prisma.issue.count();
+      if (hasData === 0) {
+        return [
+          { range: 'No Data', count: 0, percentage: 0 }
+        ];
+      }
+
       const combinedFilters = { ...filters, projectKeys };
       const whereClause = buildViewWhereClause(combinedFilters);
       
@@ -512,6 +542,12 @@ export const resolvers = {
       period: string; 
       filters?: any; 
     }) => {
+      // Early return optimization: check if we have any data at all
+      const hasData = await prisma.issue.count();
+      if (hasData === 0) {
+        return [];
+      }
+
       const combinedFilters = { ...filters, projectKeys };
       const whereClause = buildViewWhereClause(combinedFilters);
       
@@ -578,25 +614,100 @@ export const resolvers = {
       workflowMappings
     }: {
       data: any[];
-      workflowMappings: any[];
+      workflowMappings?: any[];
     }) => {
       try {
-        return await prisma.$transaction(async (tx) => {
-          // Extract unique projects from issues data
-          const projectsMap = new Map<string, { key: string; name: string; issues: any[] }>();
-          
-          // Group issues by project
-          for (const issueData of data) {
-            const projectKey = issueData.projectKey;
-            if (!projectsMap.has(projectKey)) {
-              projectsMap.set(projectKey, {
-                key: projectKey,
-                name: projectKey, // Default to key, will be updated if name is found
-                issues: []
-              });
-            }
-            projectsMap.get(projectKey)!.issues.push(issueData);
+        // Extract unique projects from issues data
+        const projectsMap = new Map<string, { key: string; name: string; issues: any[] }>();
+        
+        // Group issues by project
+        for (const issueData of data) {
+          const projectKey = issueData.projectKey;
+          if (!projectsMap.has(projectKey)) {
+            projectsMap.set(projectKey, {
+              key: projectKey,
+              name: projectKey, // Default to key, will be updated if name is found
+              issues: []
+            });
           }
+          projectsMap.get(projectKey)!.issues.push(issueData);
+        }
+
+        // Generate workflow mappings OUTSIDE transaction to avoid deadlocks
+        let finalWorkflowMappings = workflowMappings || [];
+        
+        if (!workflowMappings || workflowMappings.length === 0) {
+          try {
+            console.log('No workflow mappings provided, generating with AI...');
+            const workflowService = new WorkflowMappingService();
+            
+            // Debug the data structure to understand why no status names are being extracted
+            console.log('Sample issue data structure:');
+            console.log('First issue changelogs:', JSON.stringify(data[0]?.changelogs?.slice(0, 5), null, 2));
+            console.log('First issue changelog field:', data[0]?.changelog ? 'has changelog' : 'no changelog');
+            
+            // Look for status changes specifically
+            const statusChangeExamples = data.slice(0, 5).flatMap(issue => 
+              (issue.changelogs || []).filter((changelog: any) => 
+                changelog.fieldName === 'status' || changelog.field_name === 'status'
+              )
+            );
+            console.log('Status change examples:', JSON.stringify(statusChangeExamples, null, 2));
+            
+            const statusNames = workflowService.extractStatusNames(data);
+            console.log('Extracted status names:', statusNames);
+            
+            if (statusNames.length > 0) {
+              console.log(`Found ${statusNames.length} unique status names:`, statusNames);
+              
+              // Use the first project for context (could be enhanced to handle multi-project)
+              const firstProjectKey = Array.from(projectsMap.keys())[0];
+              const firstProject = projectsMap.get(firstProjectKey);
+              
+              console.log('Starting OpenAI API call for workflow mapping...');
+              console.log('Request payload:', {
+                projectKey: firstProjectKey,
+                projectName: firstProject?.name,
+                statusNames
+              });
+              const startTime = Date.now();
+              
+              const mappingResponse = await workflowService.generateMappings({
+                projectKey: firstProjectKey,
+                projectName: firstProject?.name,
+                statusNames
+              });
+              
+              const endTime = Date.now();
+              console.log(`OpenAI API call completed in ${endTime - startTime}ms`);
+              console.log('Raw mapping response:', mappingResponse);
+              
+              finalWorkflowMappings = mappingResponse.mappings.map(mapping => ({
+                jiraStatusName: mapping.jiraStatusName,
+                canonicalStage: mapping.canonicalStage
+              }));
+              
+              console.log('Generated workflow mappings:', finalWorkflowMappings);
+            } else {
+              console.log('No status names found in data, skipping AI generation');
+            }
+          } catch (error) {
+            console.warn('Failed to generate AI workflow mappings, using defaults:', error);
+            // Fall back to basic mappings
+            finalWorkflowMappings = [
+              { jiraStatusName: 'To Do', canonicalStage: 'BACKLOG' },
+              { jiraStatusName: 'In Progress', canonicalStage: 'IN_PROGRESS' },
+              { jiraStatusName: 'In Review', canonicalStage: 'IN_REVIEW' },
+              { jiraStatusName: 'Done', canonicalStage: 'DONE' },
+              { jiraStatusName: 'Closed', canonicalStage: 'DONE' },
+            ];
+          }
+        }
+
+        console.log('Starting transaction with finalWorkflowMappings:', finalWorkflowMappings);
+        console.log('finalWorkflowMappings length:', finalWorkflowMappings.length);
+
+        return await prisma.$transaction(async (tx) => {
 
           let projectsCreated = 0;
           let issuesCreated = 0;
@@ -626,17 +737,26 @@ export const resolvers = {
             }
 
             // Create workflow mappings for this project
+            console.log(`Creating workflow mappings for project ${projectKey} (id: ${project.id})`);
+            console.log(`Mappings to create:`, finalWorkflowMappings);
+            
             await tx.workflowMapping.deleteMany({
               where: { projectId: project.id }
             });
             
+            const mappingData = finalWorkflowMappings.map(mapping => ({
+              projectId: project.id,
+              jiraStatusName: mapping.jiraStatusName,
+              canonicalStage: mapping.canonicalStage
+            }));
+            
+            console.log(`Mapped workflow data:`, mappingData);
+            
             await tx.workflowMapping.createMany({
-              data: workflowMappings.map(mapping => ({
-                projectId: project.id,
-                jiraStatusName: mapping.jiraStatusName,
-                canonicalStage: mapping.canonicalStage
-              }))
+              data: mappingData
             });
+            
+            console.log(`Created ${mappingData.length} workflow mappings for project ${projectKey}`);
 
             const sprintCache = new Map<string, number>();
 

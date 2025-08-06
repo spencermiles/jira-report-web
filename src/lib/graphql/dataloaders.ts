@@ -19,6 +19,8 @@ export const projectMetricsLoader = new DataLoader<number, any>(async (projectId
     resolved_issues: bigint;
     avg_lead_time: number | null;
     avg_cycle_time: number | null;
+    median_lead_time: number | null;
+    median_cycle_time: number | null;
     flow_efficiency: number | null;
     first_time_through: number | null;
   }>>`
@@ -28,6 +30,8 @@ export const projectMetricsLoader = new DataLoader<number, any>(async (projectId
       resolved_issues,
       avg_lead_time,
       avg_cycle_time,
+      median_lead_time,
+      median_cycle_time,
       flow_efficiency,
       first_time_through
     FROM project_summary 
@@ -40,8 +44,9 @@ export const projectMetricsLoader = new DataLoader<number, any>(async (projectId
       {
         totalIssues: Number(metric.total_issues),
         resolvedIssues: Number(metric.resolved_issues),
-        averageLeadTime: metric.avg_lead_time ? parseFloat(metric.avg_lead_time.toString()) : null,
-        averageCycleTime: metric.avg_cycle_time ? parseFloat(metric.avg_cycle_time.toString()) : null,
+        // Use median for consistency with individual project screen
+        averageLeadTime: metric.median_lead_time ? parseFloat(metric.median_lead_time.toString()) : null,
+        averageCycleTime: metric.median_cycle_time ? parseFloat(metric.median_cycle_time.toString()) : null,
         flowEfficiency: metric.flow_efficiency ? parseFloat(metric.flow_efficiency.toString()) : null,
         firstTimeThrough: metric.first_time_through ? parseFloat(metric.first_time_through.toString()) : null
       }

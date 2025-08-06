@@ -7,6 +7,7 @@ import ora from 'ora';
 import { PrismaClient } from '@prisma/client';
 import { JiraIssue } from '../src/types/jira';
 import { CanonicalStage } from '../src/lib/db';
+import { WorkflowMappingService } from '../src/services/workflow-mapping.service';
 
 const prisma = new PrismaClient();
 
@@ -45,6 +46,7 @@ interface ImportOptions {
   project?: string;
   name?: string;
   workflowConfig?: string;
+  aiWorkflow?: boolean;
   dryRun?: boolean;
   verbose?: boolean;
   multiProject?: boolean;
@@ -52,6 +54,44 @@ interface ImportOptions {
 
 interface WorkflowConfig {
   [jiraStatusName: string]: CanonicalStage;
+}
+
+async function generateAIWorkflowConfig(
+  jiraData: JiraIssue[], 
+  projectKey: string, 
+  projectName?: string,
+  spinner?: any
+): Promise<WorkflowConfig> {
+  const workflowService = new WorkflowMappingService();
+  
+  if (spinner) spinner.text = 'Extracting status names from JIRA data...';
+  
+  // Convert JIRA issues to the format expected by the service
+  const issuesForExtraction = jiraData.map(issue => ({
+    changelogs: issue.changelogs
+  }));
+  
+  const statusNames = workflowService.extractStatusNames(issuesForExtraction);
+  
+  if (statusNames.length === 0) {
+    throw new Error('No status names found in the JIRA data');
+  }
+  
+  if (spinner) spinner.text = `Analyzing ${statusNames.length} status names with AI...`;
+  
+  const mappingResponse = await workflowService.generateMappings({
+    projectKey,
+    projectName,
+    statusNames
+  });
+  
+  // Convert to WorkflowConfig format
+  const config: WorkflowConfig = {};
+  mappingResponse.mappings.forEach(mapping => {
+    config[mapping.jiraStatusName.toLowerCase()] = mapping.canonicalStage as CanonicalStage;
+  });
+  
+  return config;
 }
 
 async function loadWorkflowConfig(configPath?: string): Promise<WorkflowConfig> {
@@ -343,8 +383,30 @@ async function importData(options: ImportOptions): Promise<void> {
 
     spinner.text = 'Loading workflow configuration...';
 
-    // Load workflow configuration
-    const workflowConfig = await loadWorkflowConfig(options.workflowConfig);
+    // Load or generate workflow configuration
+    let workflowConfig: WorkflowConfig;
+    
+    if (options.aiWorkflow) {
+      if (options.workflowConfig) {
+        throw new Error('Cannot use both --ai-workflow and --workflow-config options together');
+      }
+      
+      try {
+        workflowConfig = await generateAIWorkflowConfig(
+          jiraData, 
+          projectKeys[0], // Use first project key for AI context
+          options.name, 
+          spinner
+        );
+      } catch (error) {
+        console.warn(`⚠️  AI workflow generation failed: ${error}`);
+        console.warn('   Falling back to default workflow configuration...');
+        workflowConfig = await loadWorkflowConfig();
+      }
+    } else {
+      workflowConfig = await loadWorkflowConfig(options.workflowConfig);
+    }
+    
     const workflowMappings = Object.entries(workflowConfig).map(([jiraStatusName, canonicalStage]) => ({
       jiraStatusName: jiraStatusName.toLowerCase(),
       canonicalStage
@@ -356,6 +418,7 @@ async function importData(options: ImportOptions): Promise<void> {
       console.log(`   Issues: ${jiraData.length}`);
       console.log(`   Projects: ${projectKeys.length} (${projectKeys.join(', ')})`);
       console.log(`   Multi-project mode: ${isMultiProject ? 'Yes' : 'No'}`);
+      console.log(`   Workflow source: ${options.aiWorkflow ? 'AI-generated' : (options.workflowConfig ? 'Custom config file' : 'Default mappings')}`);
       console.log(`   Workflow mappings: ${workflowMappings.length}`);
       
       if (options.dryRun) {
@@ -456,6 +519,7 @@ program
   .option('-p, --project <key>', 'Import only this project key (useful for multi-project files)')
   .option('-n, --name <name>', 'Project name (uses project key if not provided)')
   .option('-w, --workflow-config <file>', 'Path to workflow mapping JSON file')
+  .option('-a, --ai-workflow', 'Use AI to automatically generate workflow mappings from status names')
   .option('-d, --dry-run', 'Show what would be imported without making changes')
   .option('-v, --verbose', 'Verbose output')
   .action(async (file: string, options: Omit<ImportOptions, 'file'>) => {

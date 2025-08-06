@@ -17,6 +17,7 @@ interface UseJiraUploadResult {
   clearError: () => void;
 }
 
+
 export function useJiraUpload(): UseJiraUploadResult {
   const client = useApolloClient();
   const toast = useToastContext();
@@ -280,26 +281,17 @@ export function useJiraUpload(): UseJiraUploadResult {
         };
       });
 
-      // Basic workflow mappings (can be enhanced later)
-      const workflowMappings = [
-        { jiraStatusName: 'To Do', canonicalStage: 'BACKLOG' },
-        { jiraStatusName: 'In Progress', canonicalStage: 'IN_PROGRESS' },
-        { jiraStatusName: 'In Review', canonicalStage: 'IN_REVIEW' },
-        { jiraStatusName: 'Done', canonicalStage: 'DONE' },
-        { jiraStatusName: 'Closed', canonicalStage: 'DONE' },
-      ];
-
       setProgress({
         stage: 'uploading',
         progress: 90,
         message: 'Uploading to server...'
       });
 
-      // Upload via GraphQL
+      // Upload via GraphQL (workflow mappings will be auto-generated on backend)
       await uploadJiraDataMutation({
         variables: {
           data: transformedData,
-          workflowMappings,
+          // workflowMappings is now optional and will be auto-generated
         }
       });
 

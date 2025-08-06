@@ -2,7 +2,9 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { AuthProvider } from "@/contexts/auth-context";
-import { JiraDataProvider } from "@/contexts/jira-data-context";
+import { ToastProvider } from "@/contexts/toast-context";
+import { ApolloWrapper } from "@/providers/apollo-provider";
+import ErrorBoundary from "@/components/common/ErrorBoundary";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -29,11 +31,15 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
-        <AuthProvider>
-          <JiraDataProvider>
-            {children}
-          </JiraDataProvider>
-        </AuthProvider>
+        <ErrorBoundary>
+          <ToastProvider>
+            <AuthProvider>
+              <ApolloWrapper>
+                {children}
+              </ApolloWrapper>
+            </AuthProvider>
+          </ToastProvider>
+        </ErrorBoundary>
       </body>
     </html>
   );

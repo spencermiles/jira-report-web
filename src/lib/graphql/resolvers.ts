@@ -575,71 +575,118 @@ export const resolvers = {
   Mutation: {
     uploadJiraData: async (_: any, { 
       data, 
-      workflowMappings, 
-      projectKey, 
-      projectName 
+      workflowMappings
     }: {
       data: any[];
       workflowMappings: any[];
-      projectKey: string;
-      projectName: string;
     }) => {
       try {
         return await prisma.$transaction(async (tx) => {
-          // Create or update project
-          const project = await tx.project.upsert({
-            where: { key: projectKey },
-            update: { name: projectName },
-            create: {
-              key: projectKey,
-              name: projectName
-            }
-          });
-
-          // Create workflow mappings
-          await tx.workflowMapping.deleteMany({
-            where: { projectId: project.id }
-          });
+          // Extract unique projects from issues data
+          const projectsMap = new Map<string, { key: string; name: string; issues: any[] }>();
           
-          await tx.workflowMapping.createMany({
-            data: workflowMappings.map(mapping => ({
-              projectId: project.id,
-              jiraStatusName: mapping.jiraStatusName,
-              canonicalStage: mapping.canonicalStage
-            }))
-          });
+          // Group issues by project
+          for (const issueData of data) {
+            const projectKey = issueData.projectKey;
+            if (!projectsMap.has(projectKey)) {
+              projectsMap.set(projectKey, {
+                key: projectKey,
+                name: projectKey, // Default to key, will be updated if name is found
+                issues: []
+              });
+            }
+            projectsMap.get(projectKey)!.issues.push(issueData);
+          }
 
+          let projectsCreated = 0;
           let issuesCreated = 0;
           let sprintsCreated = 0;
-          const sprintCache = new Map<string, number>();
 
-          // Process each issue
-          for (const issueData of data) {
+          // Process each project
+          for (const [projectKey, projectData] of projectsMap) {
+            // Check if project exists before upsert
+            const existingProject = await tx.project.findUnique({
+              where: { key: projectKey }
+            });
+            
+            const isNewProject = !existingProject;
+            
+            // Create or update project
+            const project = await tx.project.upsert({
+              where: { key: projectKey },
+              update: { name: projectData.name },
+              create: {
+                key: projectKey,
+                name: projectData.name
+              }
+            });
+            
+            if (isNewProject) {
+              projectsCreated++;
+            }
+
+            // Create workflow mappings for this project
+            await tx.workflowMapping.deleteMany({
+              where: { projectId: project.id }
+            });
+            
+            await tx.workflowMapping.createMany({
+              data: workflowMappings.map(mapping => ({
+                projectId: project.id,
+                jiraStatusName: mapping.jiraStatusName,
+                canonicalStage: mapping.canonicalStage
+              }))
+            });
+
+            const sprintCache = new Map<string, number>();
+
+            // Process each issue for this project
+            for (const issueData of projectData.issues) {
             // Create sprints if they don't exist
             for (const sprintInfo of issueData.sprintInfo || []) {
               if (!sprintCache.has(sprintInfo.name)) {
-                const sprint = await tx.sprint.upsert({
+                // Find existing sprint first
+                let sprint = await tx.sprint.findFirst({
                   where: {
-                    projectId_name: {
-                      projectId: project.id,
-                      name: sprintInfo.name
-                    }
-                  },
-                  update: {
-                    startDate: sprintInfo.startDate ? new Date(sprintInfo.startDate) : null,
-                    endDate: sprintInfo.endDate ? new Date(sprintInfo.endDate) : null
-                  },
-                  create: {
-                    name: sprintInfo.name,
-                    startDate: sprintInfo.startDate ? new Date(sprintInfo.startDate) : null,
-                    endDate: sprintInfo.endDate ? new Date(sprintInfo.endDate) : null,
-                    projectId: project.id
+                    projectId: project.id,
+                    name: sprintInfo.name
                   }
                 });
+                
+                let isNewSprint = false;
+                if (!sprint) {
+                  // Create new sprint if doesn't exist
+                  sprint = await tx.sprint.create({
+                    data: {
+                      name: sprintInfo.name,
+                      startDate: sprintInfo.startDate ? new Date(sprintInfo.startDate) : null,
+                      endDate: sprintInfo.endDate ? new Date(sprintInfo.endDate) : null,
+                      projectId: project.id
+                    }
+                  });
+                  isNewSprint = true;
+                } else {
+                  // Update existing sprint with any new date info
+                  sprint = await tx.sprint.update({
+                    where: { id: sprint.id },
+                    data: {
+                      startDate: sprintInfo.startDate ? new Date(sprintInfo.startDate) : sprint.startDate,
+                      endDate: sprintInfo.endDate ? new Date(sprintInfo.endDate) : sprint.endDate
+                    }
+                  });
+                }
+                
                 sprintCache.set(sprintInfo.name, sprint.id);
-                if (sprint) sprintsCreated++;
+                if (isNewSprint) sprintsCreated++;
               }
             }
+
+            // Check if issue exists before upsert
+            const existingIssue = await tx.issue.findUnique({
+              where: { key: issueData.key }
+            });
+            
+            const isNewIssue = !existingIssue;
 
             // Create or update issue
             const issue = await tx.issue.upsert({
@@ -670,7 +717,7 @@ export const resolvers = {
               }
             });
 
-            if (issue) issuesCreated++;
+            if (isNewIssue) issuesCreated++;
 
             // Create status changes
             await tx.statusChange.deleteMany({
@@ -706,14 +753,17 @@ export const resolvers = {
               }
             }
           }
+          } // Close project loop
 
           return {
             success: true,
-            message: `Successfully uploaded ${issuesCreated} issues`,
-            projectsCreated: 1,
+            message: `Successfully uploaded ${issuesCreated} issues across ${projectsCreated} projects`,
+            projectsCreated,
             issuesCreated,
             sprintsCreated
           };
+        }, {
+          timeout: 60000 // Increase timeout to 60 seconds for JIRA data uploads
         });
       } catch (error) {
         console.error('Upload error:', error);

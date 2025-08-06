@@ -72,6 +72,11 @@ export class Logger {
   }
 
   static error(message: string, error?: Error, meta?: any) {
+    // Skip console errors in test environment when LOG_LEVEL is silent
+    if (process.env.NODE_ENV === 'test' && process.env.LOG_LEVEL === 'silent') {
+      return;
+    }
+    
     const errorMeta = {
       ...meta,
       error: error ? {
@@ -288,4 +293,16 @@ export class RateLimiter {
 }
 
 // Cleanup old rate limit records every hour
-setInterval(() => RateLimiter.cleanup(), 60 * 60 * 1000);
+// Only start the cleanup interval in non-test environments
+let cleanupInterval: NodeJS.Timeout | null = null;
+if (process.env.NODE_ENV !== 'test') {
+  cleanupInterval = setInterval(() => RateLimiter.cleanup(), 60 * 60 * 1000);
+}
+
+// Export cleanup function for test cleanup
+export const stopCleanupInterval = () => {
+  if (cleanupInterval) {
+    clearInterval(cleanupInterval);
+    cleanupInterval = null;
+  }
+};

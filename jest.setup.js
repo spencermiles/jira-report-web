@@ -2,3 +2,6 @@
 // If you delete this file, remove `setupFilesAfterEnv` from `jest.config.js`
 
 // Learn more: https://jestjs.io/docs/configuration#setupfilesafterenv-array
+
+// Increase timeout for integration tests
+jest.setTimeout(30000);

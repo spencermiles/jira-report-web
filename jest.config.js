@@ -8,14 +8,19 @@ const createJestConfig = nextJest({
 // Add any custom config to be passed to Jest
 const customJestConfig = {
   setupFilesAfterEnv: ['<rootDir>/jest.setup.js'],
+  setupFiles: ['<rootDir>/jest.env.js'],
   testEnvironment: 'node',
   testTimeout: 30000,
   moduleNameMapper: {
     '^@/(.*)$': '<rootDir>/src/$1',
   },
   testMatch: [
-    '<rootDir>/**/__tests__/**/*.{js,jsx,ts,tsx}',
+    '<rootDir>/**/__tests__/**/*.{test,spec}.{js,jsx,ts,tsx}',
     '<rootDir>/**/*.{test,spec}.{js,jsx,ts,tsx}'
+  ],
+  testPathIgnorePatterns: [
+    '/node_modules/',
+    '/__tests__/setup/'
   ],
   collectCoverageFrom: [
     'src/**/*.{js,jsx,ts,tsx}',

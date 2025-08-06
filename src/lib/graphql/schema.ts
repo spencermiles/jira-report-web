@@ -245,8 +245,6 @@ export const typeDefs = gql`
     uploadJiraData(
       data: [JiraIssueInput!]!
       workflowMappings: [WorkflowMappingInput!]!
-      projectKey: String!
-      projectName: String!
     ): UploadResult!
     deleteProject(id: ID!): Boolean!
   }

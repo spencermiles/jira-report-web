@@ -4,12 +4,14 @@ const prisma = new PrismaClient();
 
 export async function setupTestDatabase() {
   // Clear all tables in reverse dependency order to avoid foreign key constraints
-  await prisma.statusChange.deleteMany();
-  await prisma.issuesSprints.deleteMany();
-  await prisma.issue.deleteMany();
-  await prisma.sprint.deleteMany();
-  await prisma.workflowMapping.deleteMany();
-  await prisma.project.deleteMany();
+  await prisma.$transaction([
+    prisma.statusChange.deleteMany(),
+    prisma.issuesSprints.deleteMany(),
+    prisma.issue.deleteMany(),
+    prisma.sprint.deleteMany(),
+    prisma.workflowMapping.deleteMany(),
+    prisma.project.deleteMany(),
+  ]);
 }
 
 export async function teardownTestDatabase() {

@@ -1,1 +1,1 @@
-export { default } from './JiraIssueReport';
+export { default } from './JiraIssueReportHybrid';

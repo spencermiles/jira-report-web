@@ -533,11 +533,27 @@ export const resolvers = {
             COUNT(DISTINCT p.id) as total_projects,
             SUM(COALESCE(ps.total_issues, 0)) as total_issues,
             SUM(COALESCE(ps.resolved_issues, 0)) as total_resolved_issues,
-            AVG(ps.avg_lead_time) as overall_avg_lead_time,
-            AVG(ps.avg_cycle_time) as overall_avg_cycle_time,
-            AVG(ps.flow_efficiency) as overall_flow_efficiency
+            -- Calculate weighted averages across all issues, not project averages
+            CASE 
+              WHEN SUM(CASE WHEN im.lead_time IS NOT NULL THEN 1 ELSE 0 END) > 0 
+              THEN ROUND(CAST(AVG(im.lead_time) AS NUMERIC), 1)
+              ELSE NULL 
+            END as overall_avg_lead_time,
+            CASE 
+              WHEN SUM(CASE WHEN im.cycle_time IS NOT NULL THEN 1 ELSE 0 END) > 0 
+              THEN ROUND(CAST(AVG(im.cycle_time) AS NUMERIC), 1)
+              ELSE NULL 
+            END as overall_avg_cycle_time,
+            -- Flow efficiency calculated from the weighted averages
+            CASE 
+              WHEN AVG(im.lead_time) > 0 AND AVG(im.cycle_time) IS NOT NULL
+              THEN ROUND(CAST((AVG(im.cycle_time) / AVG(im.lead_time)) * 100 AS NUMERIC), 1)
+              ELSE NULL 
+            END as overall_flow_efficiency
           FROM projects p
           LEFT JOIN project_summary ps ON p.id = ps.id
+          LEFT JOIN issues i ON p.id = i.project_id 
+          LEFT JOIN issue_metrics im ON i.id = im.id AND i.resolved IS NOT NULL
           WHERE p.company_id = ${companyId}
         `
       ]);

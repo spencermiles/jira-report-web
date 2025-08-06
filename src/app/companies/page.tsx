@@ -173,10 +173,28 @@ export default function CompaniesPage() {
                       </div>
                     </div>
                     <div>
+                      <div className="text-sm text-gray-500">Median Cycle Time</div>
+                      <div className="text-lg font-semibold text-purple-600">
+                        {company.metrics.averageCycleTime
+                          ? `${company.metrics.averageCycleTime.toFixed(1)}d`
+                          : 'N/A'
+                        }
+                      </div>
+                    </div>
+                    <div>
                       <div className="text-sm text-gray-500">Flow Efficiency</div>
                       <div className="text-lg font-semibold text-blue-600">
                         {company.metrics.flowEfficiency 
                           ? `${(company.metrics.flowEfficiency * 100).toFixed(1)}%`
+                          : 'N/A'
+                        }
+                      </div>
+                    </div>
+                    <div>
+                      <div className="text-sm text-gray-500">Resolution Rate</div>
+                      <div className="text-lg font-semibold text-emerald-600">
+                        {company.metrics.totalIssues > 0
+                          ? `${Math.round((company.metrics.resolvedIssues / company.metrics.totalIssues) * 100)}%`
                           : 'N/A'
                         }
                       </div>

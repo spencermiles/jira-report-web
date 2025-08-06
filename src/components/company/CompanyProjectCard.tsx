@@ -4,7 +4,7 @@ import React from 'react';
 import { ArrowRight } from 'lucide-react';
 import { paths } from '@/lib/paths';
 import CycleTimeCard from '@/components/jira-report/ui/CycleTimeCard';
-import DefectResolutionSummaryWidget from '../projects/DefectResolutionSummaryWidget';
+import DefectResolutionSummaryWidget from './DefectResolutionSummaryWidget';
 import { useProjectDefectStats } from '@/hooks/use-project-defect-stats';
 import type { GraphQLProjectSummary } from '@/types/graphql';
 

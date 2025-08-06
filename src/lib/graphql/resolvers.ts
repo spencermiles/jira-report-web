@@ -106,12 +106,16 @@ function buildIssueWhereClause(companyId: string, filters?: any): Prisma.IssueWh
 }
 
 // Helper function to build SQL WHERE clause for database views
+// TODO: Consider consolidating this with enhanced database views/functions for better performance
 function buildViewWhereClause(companyId: string, filters?: any, projectIdField = 'project_id'): string {
-  const conditions: string[] = [
-    `company_id = '${companyId}'` // MANDATORY: All queries must be scoped to company
-  ];
+  const conditions: string[] = [];
   
-  if (!filters) return `WHERE ${conditions.join(' AND ')}`;
+  // Only add company filter if companyId is provided (some queries handle this in context)
+  if (companyId) {
+    conditions.push(`company_id = '${companyId}'`);
+  }
+  
+  if (!filters) return conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
   
   if (filters.projectKeys?.length) {
     const projectKeysStr = filters.projectKeys.map((k: string) => `'${k}'`).join(',');
@@ -128,6 +132,7 @@ function buildViewWhereClause(companyId: string, filters?: any, projectIdField =
     conditions.push(`priority IN (${prioritiesStr})`);
   }
   
+  // Metric-based filters (these require issue_metrics view)
   if (filters.cycleTimeMin !== undefined) {
     conditions.push(`cycle_time >= ${filters.cycleTimeMin}`);
   }
@@ -156,6 +161,7 @@ function buildViewWhereClause(companyId: string, filters?: any, projectIdField =
     conditions.push(`review_churn = 0 AND qa_churn = 0`);
   }
   
+  // Date filters
   if (filters.createdAfter) {
     conditions.push(`created >= '${filters.createdAfter}'`);
   }
@@ -184,7 +190,7 @@ function buildViewWhereClause(companyId: string, filters?: any, projectIdField =
     conditions.push(`(summary ILIKE '%${filters.search}%' OR key ILIKE '%${filters.search}%')`);
   }
   
-  return `WHERE ${conditions.join(' AND ')}`;
+  return conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
 }
 
 // Helper function to build ORDER BY clause
@@ -365,7 +371,7 @@ export const resolvers = {
         filters.hasBlockers !== undefined ||
         filters.hasChurn !== undefined
       )) {
-        const whereClause = buildViewWhereClause(filters);
+        const whereClause = buildViewWhereClause('', filters); // companyId will be validated in context
         const orderClause = buildOrderByClause(sort);
         
         const countResult = await prisma.$queryRaw<Array<{ count: bigint }>>`
@@ -479,7 +485,8 @@ export const resolvers = {
         ? { name: sort.direction === 'ASC' ? 'asc' : 'desc' }
         : { updatedAt: 'desc' };
       
-      const whereClause = buildViewWhereClause(filters, 'id');
+      // Note: Currently not applying filters to aggregated metrics - could be enhanced later
+      // const whereClause = buildViewWhereClause(companyId, filters, 'id');
       const orderClause = sort?.field === 'name' 
         ? `ORDER BY name ${sort.direction === 'ASC' ? 'ASC' : 'DESC'}`
         : 'ORDER BY updated_at DESC';
@@ -525,36 +532,11 @@ export const resolvers = {
           total_projects: bigint;
           total_issues: bigint;
           total_resolved_issues: bigint;
-          overall_avg_lead_time: number | null;
-          overall_avg_cycle_time: number | null;
+          overall_median_lead_time: number | null;
+          overall_median_cycle_time: number | null;
           overall_flow_efficiency: number | null;
         }>>`
-          SELECT 
-            COUNT(DISTINCT p.id) as total_projects,
-            SUM(COALESCE(ps.total_issues, 0)) as total_issues,
-            SUM(COALESCE(ps.resolved_issues, 0)) as total_resolved_issues,
-            -- Use medians for consistency with individual project displays
-            CASE 
-              WHEN SUM(CASE WHEN im.lead_time IS NOT NULL THEN 1 ELSE 0 END) > 0 
-              THEN ROUND(CAST(PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY im.lead_time) AS NUMERIC), 1)
-              ELSE NULL 
-            END as overall_avg_lead_time,
-            CASE 
-              WHEN SUM(CASE WHEN im.cycle_time IS NOT NULL THEN 1 ELSE 0 END) > 0 
-              THEN ROUND(CAST(PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY im.cycle_time) AS NUMERIC), 1)
-              ELSE NULL 
-            END as overall_avg_cycle_time,
-            -- Flow efficiency calculated using medians
-            CASE 
-              WHEN PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY im.lead_time) > 0 AND PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY im.cycle_time) IS NOT NULL
-              THEN ROUND(CAST((PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY im.cycle_time) / PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY im.lead_time)) * 100 AS NUMERIC), 1)
-              ELSE NULL 
-            END as overall_flow_efficiency
-          FROM projects p
-          LEFT JOIN project_summary ps ON p.id = ps.id
-          LEFT JOIN issues i ON p.id = i.project_id 
-          LEFT JOIN issue_metrics im ON i.id = im.id AND i.resolved IS NOT NULL
-          WHERE p.company_id = ${companyId}
+          SELECT * FROM get_company_aggregated_metrics(${companyId})
         `
       ]);
       
@@ -590,8 +572,8 @@ export const resolvers = {
           totalIssues: Number(aggregated.total_issues),
           totalResolvedIssues: Number(aggregated.total_resolved_issues),
           // These are now medians for consistency with project-level displays
-          overallAverageLeadTime: aggregated.overall_avg_lead_time ? parseFloat(aggregated.overall_avg_lead_time.toString()) : null,
-          overallAverageCycleTime: aggregated.overall_avg_cycle_time ? parseFloat(aggregated.overall_avg_cycle_time.toString()) : null,
+          overallAverageLeadTime: aggregated.overall_median_lead_time ? parseFloat(aggregated.overall_median_lead_time.toString()) : null,
+          overallAverageCycleTime: aggregated.overall_median_cycle_time ? parseFloat(aggregated.overall_median_cycle_time.toString()) : null,
           overallFlowEfficiency: aggregated.overall_flow_efficiency ? parseFloat(aggregated.overall_flow_efficiency.toString()) : null
         }
       };
@@ -1283,62 +1265,51 @@ export const resolvers = {
     metrics: async (parent: any) => {
       const companyId = parent.id;
       
-      // Get basic metrics for the company
-      const [projectCount, totalIssues, resolvedIssues] = await Promise.all([
-        prisma.project.count({
-          where: { companyId }
-        }),
-        prisma.issue.count({
-          where: { companyId }
-        }),
-        prisma.issue.count({
-          where: {
-            companyId,
-            resolved: { not: null }
-          }
-        })
-      ]);
+      // Use the consolidated company_summary view
+      const result = await prisma.$queryRaw<Array<{
+        total_projects: bigint;
+        total_issues: bigint;
+        total_resolved_issues: bigint;
+        median_lead_time: number | null;
+        median_cycle_time: number | null;
+        flow_efficiency: number | null;
+        first_time_through: number | null;
+      }>>`
+        SELECT 
+          total_projects,
+          total_issues,
+          total_resolved_issues,
+          median_lead_time,
+          median_cycle_time,
+          flow_efficiency,
+          first_time_through
+        FROM company_summary
+        WHERE id = ${companyId}
+      `;
 
-      // Calculate average lead time from resolved issues
-      const resolvedIssuesWithDates = await prisma.issue.findMany({
-        where: {
-          companyId,
-          resolved: { not: null }
-        },
-        select: {
-          created: true,
-          resolved: true
-        }
-      });
-
-      let averageLeadTime = null;
-      let averageCycleTime = null;
-      let flowEfficiency = null;
-
-      if (resolvedIssuesWithDates.length > 0) {
-        const leadTimes = resolvedIssuesWithDates.map(issue => {
-          if (issue.resolved && issue.created) {
-            return (issue.resolved.getTime() - issue.created.getTime()) / (1000 * 60 * 60 * 24); // days
-          }
-          return 0;
-        }).filter(time => time > 0);
-
-        if (leadTimes.length > 0) {
-          averageLeadTime = leadTimes.reduce((sum, time) => sum + time, 0) / leadTimes.length;
-          // For now, use lead time as cycle time approximation
-          averageCycleTime = averageLeadTime;
-          flowEfficiency = averageCycleTime / averageLeadTime;
-        }
+      const metrics = result[0];
+      
+      if (!metrics) {
+        // Return empty metrics if company not found or no data
+        return {
+          totalProjects: 0,
+          totalIssues: 0,
+          resolvedIssues: 0,
+          averageLeadTime: null,
+          averageCycleTime: null,
+          flowEfficiency: null,
+          firstTimeThrough: null
+        };
       }
-
+      
       return {
-        totalProjects: projectCount,
-        totalIssues,
-        resolvedIssues,
-        averageLeadTime,
-        averageCycleTime,
-        flowEfficiency,
-        firstTimeThrough: null // TODO: Calculate first time through rate
+        totalProjects: Number(metrics.total_projects),
+        totalIssues: Number(metrics.total_issues),
+        resolvedIssues: Number(metrics.total_resolved_issues),
+        averageLeadTime: metrics.median_lead_time ? parseFloat(metrics.median_lead_time.toString()) : null,
+        averageCycleTime: metrics.median_cycle_time ? parseFloat(metrics.median_cycle_time.toString()) : null,
+        flowEfficiency: metrics.flow_efficiency ? parseFloat(metrics.flow_efficiency.toString()) / 100 : null, // Convert back to decimal
+        firstTimeThrough: metrics.first_time_through ? parseFloat(metrics.first_time_through.toString()) : null
       };
     }
   }

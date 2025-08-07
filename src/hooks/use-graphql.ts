@@ -96,6 +96,7 @@ export function useProjectWithIssues(
 
 // Issues hooks
 export function useIssues(
+  companyId: string,
   filters?: IssueFilters,
   pagination?: PaginationInput,
   sort?: SortInput,
@@ -104,10 +105,12 @@ export function useIssues(
   return useQuery(GET_ISSUES, {
     ...options,
     variables: {
+      companyId,
       filters,
       pagination: pagination || { limit: 50, offset: 0 },
       sort,
     },
+    skip: !companyId || options?.skip,
   });
 }
 
@@ -163,7 +166,17 @@ export function useDashboardData(
 
 // Lazy query hooks for on-demand fetching
 export function useLazyIssues(options?: LazyQueryHookOptions) {
-  return useLazyQuery(GET_ISSUES, options);
+  const [execute, result] = useLazyQuery(GET_ISSUES, options);
+  
+  // Return a wrapper that ensures companyId is provided
+  const wrappedExecute = (variables?: { companyId: string; filters?: IssueFilters; pagination?: PaginationInput; sort?: SortInput }) => {
+    if (!variables?.companyId) {
+      throw new Error('companyId is required for issues query');
+    }
+    return execute({ variables });
+  };
+  
+  return [wrappedExecute, result] as const;
 }
 
 export function useLazyProjectWithIssues(options?: LazyQueryHookOptions) {

@@ -4,15 +4,16 @@ import { GET_ISSUES } from '@/lib/graphql/queries';
 import { ProcessedStory, DefectResolutionStats } from '@/types/jira';
 import { calculateStats } from '@/components/jira-report/utils/calculations';
 
-export const useProjectDefectStats = (projectKey: string) => {
+export const useProjectDefectStats = (projectKey: string, companyId?: string) => {
   const { data, loading, error } = useQuery(GET_ISSUES, {
     variables: {
+      companyId: companyId || '', // Will be skipped if not provided
       filters: {
         projectKeys: [projectKey],
       },
       pagination: { limit: 1000, offset: 0 },
     },
-    skip: !projectKey,
+    skip: !projectKey || !companyId,
   });
 
   const defectResolutionStats = useMemo((): DefectResolutionStats[] => {
@@ -23,12 +24,15 @@ export const useProjectDefectStats = (projectKey: string) => {
       id: issue.id,
       key: issue.key,
       summary: issue.summary,
-      issueType: issue.issueType,
+      issue_type: issue.issueType, // Note: ProcessedStory uses snake_case
       priority: issue.priority,
       created: issue.created,
       resolved: issue.resolved,
-      storyPoints: issue.storyPoints,
-      parentKey: issue.parentKey,
+      story_points: issue.storyPoints,
+      parent_key: issue.parentKey,
+      project_key: issue.projectKey || '',
+      web_url: issue.webUrl,
+      sprint: issue.sprint || '',
       metrics: issue.metrics || {
         leadTime: null,
         cycleTime: null,
@@ -38,7 +42,18 @@ export const useProjectDefectStats = (projectKey: string) => {
         blockers: 0,
         reviewChurn: 0,
         qaChurn: 0,
+        timestamps: {
+          opened: null,
+          readyForDev: null,
+          readyForGrooming: null,
+          inProgress: null,
+          inReview: null,
+          inQA: null,
+          done: null,
+          readyForRelease: null,
+        },
       },
+      subIssueCount: 0,
     }));
 
     // Common defect/bug issue types (case-insensitive)
@@ -47,8 +62,8 @@ export const useProjectDefectStats = (projectKey: string) => {
     // Filter for resolved defects only
     const resolvedDefects = stories.filter(story => 
       story.resolved && 
-      story.issueType && 
-      defectTypes.some(type => story.issueType.toLowerCase().includes(type))
+      story.issue_type && 
+      defectTypes.some(type => story.issue_type.toLowerCase().includes(type))
     );
 
     if (resolvedDefects.length === 0) {

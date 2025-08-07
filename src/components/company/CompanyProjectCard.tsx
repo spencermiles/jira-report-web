@@ -11,10 +11,11 @@ import type { GraphQLProjectSummary } from '@/types/graphql';
 interface CompanyProjectCardProps {
   project: GraphQLProjectSummary;
   companySlug: string;
+  companyId: string;
 }
 
-const CompanyProjectCard: React.FC<CompanyProjectCardProps> = ({ project, companySlug }) => {
-  const { defectResolutionStats, loading: defectStatsLoading } = useProjectDefectStats(project.key);
+const CompanyProjectCard: React.FC<CompanyProjectCardProps> = ({ project, companySlug, companyId }) => {
+  const { defectResolutionStats, loading: defectStatsLoading } = useProjectDefectStats(project.key, companyId);
 
   return (
     <a

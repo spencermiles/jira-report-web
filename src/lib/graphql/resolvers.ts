@@ -341,10 +341,12 @@ export const resolvers = {
     }, 'projectWithIssues'),
 
     issues: withErrorHandling(async (_: any, { 
+      companyId,
       filters, 
       pagination = { limit: 50, offset: 0 }, 
       sort 
     }: { 
+      companyId: string;
       filters?: any; 
       pagination?: any; 
       sort?: any; 
@@ -356,6 +358,9 @@ export const resolvers = {
           extensions: { code: 'RATE_LIMIT_EXCEEDED' }
         });
       }
+
+      // Validate company access
+      await validateCompanyAccess(companyId, context);
       
       // Validate inputs
       const validatedPagination = validatePagination(pagination);
@@ -371,7 +376,7 @@ export const resolvers = {
         filters.hasBlockers !== undefined ||
         filters.hasChurn !== undefined
       )) {
-        const whereClause = buildViewWhereClause('', filters); // companyId will be validated in context
+        const whereClause = buildViewWhereClause(companyId, filters);
         const orderClause = buildOrderByClause(sort);
         
         const countResult = await prisma.$queryRaw<Array<{ count: bigint }>>`
@@ -429,9 +434,8 @@ export const resolvers = {
         };
       }
       
-      // For simple filtering, use Prisma directly
-      // Note: This query needs to be scoped to a company. This suggests it should be moved to a company-scoped resolver
-      throw new Error('Issues query without company context not supported. Use company-specific queries instead.');
+      // For simple filtering, use Prisma directly with company scoping
+      const whereClause = buildIssueWhereClause(companyId, filters);
       
       const [issues, totalCount] = await Promise.all([
         prisma.issue.findMany({
@@ -952,7 +956,8 @@ export const resolvers = {
             }
 
             // Check if issue exists in this company before upsert
-            const existingIssue = await tx.issue.findUnique({
+            // First try to find by company+key
+            let existingIssue = await tx.issue.findUnique({
               where: { 
                 issues_company_key_unique: {
                   companyId,
@@ -961,42 +966,61 @@ export const resolvers = {
               }
             });
             
+            // Also check by company+jiraId to avoid constraint violations
+            if (!existingIssue && issueData.jiraId) {
+              existingIssue = await tx.issue.findUnique({
+                where: {
+                  issues_company_jira_id_unique: {
+                    companyId,
+                    jiraId: issueData.jiraId
+                  }
+                }
+              });
+            }
+            
             const isNewIssue = !existingIssue;
 
             // Create or update issue
-            const issue = await tx.issue.upsert({
-              where: { 
-                issues_company_key_unique: {
-                  companyId,
+            let issue;
+            if (existingIssue) {
+              // Update existing issue (found by either key or jiraId)
+              issue = await tx.issue.update({
+                where: { id: existingIssue.id },
+                data: {
+                  summary: issueData.summary,
+                  issueType: issueData.issueType,
+                  priority: issueData.priority,
+                  storyPoints: issueData.storyPoints,
+                  parentKey: issueData.parentKey,
+                  webUrl: issueData.webUrl,
+                  resolved: issueData.resolved ? new Date(issueData.resolved) : null,
+                  rawData: issueData.rawData,
+                  // Update jiraId if it was found by key but jiraId is different
+                  jiraId: issueData.jiraId,
+                  // Update key if it was found by jiraId but key is different
                   key: issueData.key
                 }
-              },
-              update: {
-                summary: issueData.summary,
-                issueType: issueData.issueType,
-                priority: issueData.priority,
-                storyPoints: issueData.storyPoints,
-                parentKey: issueData.parentKey,
-                webUrl: issueData.webUrl,
-                resolved: issueData.resolved ? new Date(issueData.resolved) : null,
-                rawData: issueData.rawData
-              },
-              create: {
-                jiraId: issueData.jiraId,
-                key: issueData.key,
-                summary: issueData.summary,
-                issueType: issueData.issueType,
-                priority: issueData.priority,
-                projectId: project.id,
-                companyId,
-                storyPoints: issueData.storyPoints,
-                parentKey: issueData.parentKey,
-                webUrl: issueData.webUrl,
-                created: new Date(issueData.created),
-                resolved: issueData.resolved ? new Date(issueData.resolved) : null,
-                rawData: issueData.rawData
-              }
-            });
+              });
+            } else {
+              // Create new issue
+              issue = await tx.issue.create({
+                data: {
+                  jiraId: issueData.jiraId,
+                  key: issueData.key,
+                  summary: issueData.summary,
+                  issueType: issueData.issueType,
+                  priority: issueData.priority,
+                  projectId: project.id,
+                  companyId,
+                  storyPoints: issueData.storyPoints,
+                  parentKey: issueData.parentKey,
+                  webUrl: issueData.webUrl,
+                  created: new Date(issueData.created),
+                  resolved: issueData.resolved ? new Date(issueData.resolved) : null,
+                  rawData: issueData.rawData
+                }
+              });
+            }
 
             if (isNewIssue) issuesCreated++;
 

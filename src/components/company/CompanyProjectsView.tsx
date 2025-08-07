@@ -175,6 +175,7 @@ const CompanyProjectsView: React.FC<CompanyProjectsViewProps> = ({
                 key={project.key} 
                 project={project} 
                 companySlug={companySlug}
+                companyId={companyId}
               />
             ))}
           </div>

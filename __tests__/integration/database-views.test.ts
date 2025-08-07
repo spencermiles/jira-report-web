@@ -1,5 +1,5 @@
 import { setupTestDatabase, teardownTestDatabase, prisma } from '../setup/test-db';
-import { createCycleTimeTestScenario } from '../setup/test-data';
+import { createCycleTimeTestScenario, createTestCompany, createTestProject, createTestIssue } from '../setup/test-data';
 
 describe('Database Views Integration Tests', () => {
   beforeAll(async () => {
@@ -168,23 +168,19 @@ describe('Database Views Integration Tests', () => {
     });
 
     it('should handle projects with no resolved issues', async () => {
-      // Create a project with only unresolved issues
-      const project = await prisma.project.create({
-        data: { key: 'EMPTY', name: 'Empty Project' }
-      });
+      // Create a company and project with only unresolved issues
+      const company = await createTestCompany('Empty Company', 'empty-company');
+      const project = await createTestProject('EMPTY', 'Empty Project', company.id);
 
-      const issue = await prisma.issue.create({
-        data: {
-          jiraId: 'empty-001',
-          key: 'EMPTY-001',
-          summary: 'Unresolved issue',
-          issueType: 'Story',
-          priority: 'P2',
-          projectId: project.id,
-          storyPoints: 5,
-          created: new Date(),
-          rawData: {},
-        },
+      const issue = await createTestIssue({
+        jiraId: 'empty-001',
+        key: 'EMPTY-001',
+        summary: 'Unresolved issue',
+        issueType: 'Story',
+        priority: 'P2',
+        projectId: project.id,
+        storyPoints: 5,
+        created: new Date(),
       });
 
       const summaries = await prisma.$queryRaw<Array<{
@@ -270,24 +266,20 @@ describe('Database Views Integration Tests', () => {
 
   describe('Edge cases and error handling', () => {
     it('should handle issues with missing status changes gracefully', async () => {
-      const project = await prisma.project.create({
-        data: { key: 'EDGE', name: 'Edge Case Project' }
-      });
+      const company = await createTestCompany('Edge Case Company', 'edge-case-company');
+      const project = await createTestProject('EDGE', 'Edge Case Project', company.id);
 
       // Create issue without any status changes
-      const issue = await prisma.issue.create({
-        data: {
-          jiraId: 'edge-001',
-          key: 'EDGE-001',
-          summary: 'Issue without status changes',
-          issueType: 'Story',
-          priority: 'P2',
-          projectId: project.id,
-          storyPoints: 5,
-          created: new Date('2024-01-01T09:00:00Z'),
-          resolved: new Date('2024-01-05T17:00:00Z'), // Resolved 4.33 days later but no status changes
-          rawData: {},
-        },
+      const issue = await createTestIssue({
+        jiraId: 'edge-001',
+        key: 'EDGE-001',
+        summary: 'Issue without status changes',
+        issueType: 'Story',
+        priority: 'P2',
+        projectId: project.id,
+        storyPoints: 5,
+        created: new Date('2024-01-01T09:00:00Z'),
+        resolved: new Date('2024-01-05T17:00:00Z'), // Resolved 4.33 days later but no status changes
       });
 
       const metrics = await prisma.$queryRaw<Array<{
@@ -306,50 +298,41 @@ describe('Database Views Integration Tests', () => {
     });
 
     it('should handle workflow mappings for different projects', async () => {
-      // Create two projects with different workflow mappings
-      const project1 = await prisma.project.create({
-        data: { key: 'PROJ1', name: 'Project 1' }
-      });
-      
-      const project2 = await prisma.project.create({
-        data: { key: 'PROJ2', name: 'Project 2' }
-      });
+      // Create companies and projects with different workflow mappings
+      const company1 = await createTestCompany('Project Company 1', 'project-company-1');
+      const company2 = await createTestCompany('Project Company 2', 'project-company-2');
+      const project1 = await createTestProject('PROJ1', 'Project 1', company1.id);
+      const project2 = await createTestProject('PROJ2', 'Project 2', company2.id);
 
       // Different status names for same canonical stage
       await prisma.workflowMapping.createMany({
         data: [
-          { projectId: project1.id, jiraStatusName: 'Development', canonicalStage: 'IN_PROGRESS' },
-          { projectId: project2.id, jiraStatusName: 'Coding', canonicalStage: 'IN_PROGRESS' },
+          { projectId: project1.id, companyId: company1.id, jiraStatusName: 'Development', canonicalStage: 'IN_PROGRESS' },
+          { projectId: project2.id, companyId: company2.id, jiraStatusName: 'Coding', canonicalStage: 'IN_PROGRESS' },
         ],
       });
 
       // Create identical issues in both projects
-      const issue1 = await prisma.issue.create({
-        data: {
-          jiraId: 'proj1-001',
-          key: 'PROJ1-001',
-          summary: 'Test issue',
-          issueType: 'Story',
-          priority: 'P2',
-          projectId: project1.id,
-          created: new Date('2024-01-01'),
-          resolved: new Date('2024-01-10'),
-          rawData: {},
-        },
+      const issue1 = await createTestIssue({
+        jiraId: 'proj1-001',
+        key: 'PROJ1-001',
+        summary: 'Test issue',
+        issueType: 'Story',
+        priority: 'P2',
+        projectId: project1.id,
+        created: new Date('2024-01-01'),
+        resolved: new Date('2024-01-10'),
       });
 
-      const issue2 = await prisma.issue.create({
-        data: {
-          jiraId: 'proj2-001',
-          key: 'PROJ2-001',
-          summary: 'Test issue',
-          issueType: 'Story',
-          priority: 'P2',
-          projectId: project2.id,
-          created: new Date('2024-01-01'),
-          resolved: new Date('2024-01-10'),
-          rawData: {},
-        },
+      const issue2 = await createTestIssue({
+        jiraId: 'proj2-001',
+        key: 'PROJ2-001',
+        summary: 'Test issue',
+        issueType: 'Story',
+        priority: 'P2',
+        projectId: project2.id,
+        created: new Date('2024-01-01'),
+        resolved: new Date('2024-01-10'),
       });
 
       // Add status changes using project-specific status names
@@ -357,6 +340,7 @@ describe('Database Views Integration Tests', () => {
         data: [
           {
             issueId: issue1.id,
+            companyId: company1.id,
             fieldName: 'status',
             fromValue: null,
             toValue: 'Development',
@@ -364,6 +348,7 @@ describe('Database Views Integration Tests', () => {
           },
           {
             issueId: issue2.id,
+            companyId: company2.id,
             fieldName: 'status',
             fromValue: null,
             toValue: 'Coding',

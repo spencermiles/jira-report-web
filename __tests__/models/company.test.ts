@@ -6,24 +6,28 @@ describe('Company Model', () => {
   let defaultCompany: Company;
 
   beforeAll(async () => {
-    // Clean up and get default company
+    // Clean up all companies first
     await prisma.issue.deleteMany({});
     await prisma.project.deleteMany({});
-    await prisma.company.deleteMany({
-      where: { slug: { not: 'default-organization' } }
-    });
+    await prisma.company.deleteMany({});
     
-    defaultCompany = await prisma.company.findUniqueOrThrow({
-      where: { slug: 'default-organization' }
+    // Create default company
+    defaultCompany = await prisma.company.create({
+      data: {
+        name: 'Default Organization',
+        slug: 'default-organization',
+        description: 'Default organization for system data'
+      }
     });
   });
 
   beforeEach(async () => {
-    // Create test company for each test
+    // Create test company for each test with unique name
+    const timestamp = Date.now();
     testCompany = await prisma.company.create({
       data: {
-        name: 'Test Company',
-        slug: 'test-company',
+        name: `Test Company ${timestamp}`,
+        slug: `test-company-${timestamp}`,
         description: 'A test company for unit testing',
         logoUrl: 'https://example.com/logo.png',
         website: 'https://test-company.com',
@@ -34,11 +38,13 @@ describe('Company Model', () => {
 
   afterEach(async () => {
     // Clean up test data
-    await prisma.issue.deleteMany({ where: { companyId: testCompany.id } });
-    await prisma.project.deleteMany({ where: { companyId: testCompany.id } });
-    await prisma.company.deleteMany({ 
-      where: { id: testCompany.id } 
-    });
+    if (testCompany?.id) {
+      await prisma.issue.deleteMany({ where: { companyId: testCompany.id } });
+      await prisma.project.deleteMany({ where: { companyId: testCompany.id } });
+      await prisma.company.deleteMany({ 
+        where: { id: testCompany.id } 
+      });
+    }
   });
 
   afterAll(async () => {
@@ -48,8 +54,8 @@ describe('Company Model', () => {
   describe('Company Creation', () => {
     it('should create a company with all required fields', () => {
       expect(testCompany.id).toBeDefined();
-      expect(testCompany.name).toBe('Test Company');
-      expect(testCompany.slug).toBe('test-company');
+      expect(testCompany.name).toMatch(/^Test Company \d+$/);
+      expect(testCompany.slug).toMatch(/^test-company-\d+$/);
       expect(testCompany.description).toBe('A test company for unit testing');
       expect(testCompany.logoUrl).toBe('https://example.com/logo.png');
       expect(testCompany.website).toBe('https://test-company.com');
@@ -82,7 +88,7 @@ describe('Company Model', () => {
       await expect(
         prisma.company.create({
           data: {
-            name: 'Test Company', // Same as testCompany
+            name: testCompany.name, // Same as testCompany
             slug: 'different-slug'
           }
         })
@@ -94,7 +100,7 @@ describe('Company Model', () => {
         prisma.company.create({
           data: {
             name: 'Different Company',
-            slug: 'test-company' // Same as testCompany
+            slug: testCompany.slug // Same as testCompany
           }
         })
       ).rejects.toThrow();
@@ -122,7 +128,7 @@ describe('Company Model', () => {
 
       expect(project).toBeDefined();
       expect(project?.companyId).toBe(testCompany.id);
-      expect(project?.company.name).toBe('Test Company');
+      expect(project?.company.name).toBe(testCompany.name);
     });
 
     it('should allow same project key in different companies', async () => {
@@ -223,7 +229,7 @@ describe('Company Model', () => {
 
       expect(issue).toBeDefined();
       expect(issue?.companyId).toBe(testCompany.id);
-      expect(issue?.company.name).toBe('Test Company');
+      expect(issue?.company.name).toBe(testCompany.name);
       expect(issue?.project.key).toBe('TEST');
     });
 

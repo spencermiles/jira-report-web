@@ -35,11 +35,11 @@ describe('GraphQL API Integration Tests', () => {
 
   describe('Advanced Query Resolvers', () => {
     it('should handle complex issues query with pagination and filtering', async () => {
-      const { project } = await createCycleTimeTestScenario();
+      const { company, project } = await createCycleTimeTestScenario();
       
       const query = `
-        query GetIssues($filters: IssueFilters, $pagination: PaginationInput, $sort: SortInput) {
-          issues(filters: $filters, pagination: $pagination, sort: $sort) {
+        query GetIssues($companyId: ID!, $filters: IssueFilters, $pagination: PaginationInput, $sort: SortInput) {
+          issues(companyId: $companyId, filters: $filters, pagination: $pagination, sort: $sort) {
             issues {
               id
               key
@@ -59,6 +59,7 @@ describe('GraphQL API Integration Tests', () => {
       `;
 
       const variables = {
+        companyId: company.id,
         filters: {
           projectKeys: [project.key],
           cycleTimeMin: 10.0,
@@ -105,11 +106,11 @@ describe('GraphQL API Integration Tests', () => {
     });
 
     it('should provide project summaries with aggregated metrics', async () => {
-      const { project } = await createCycleTimeTestScenario();
+      const { company, project } = await createCycleTimeTestScenario();
       
       const query = `
-        query GetProjectSummaries($pagination: PaginationInput) {
-          projectSummaries(pagination: $pagination) {
+        query GetProjectSummaries($companyId: ID!, $pagination: PaginationInput) {
+          projectSummaries(companyId: $companyId, pagination: $pagination) {
             projects {
               id
               key
@@ -138,6 +139,7 @@ describe('GraphQL API Integration Tests', () => {
       `;
 
       const variables = {
+        companyId: company.id,
         pagination: {
           limit: 50,
           offset: 0
@@ -180,11 +182,11 @@ describe('GraphQL API Integration Tests', () => {
     });
 
     it('should provide cycle time distribution analytics', async () => {
-      const { project } = await createCycleTimeTestScenario();
+      const { company, project } = await createCycleTimeTestScenario();
       
       const query = `
-        query GetCycleTimeDistribution($projectKeys: [String!], $filters: IssueFilters) {
-          cycleTimeDistribution(projectKeys: $projectKeys, filters: $filters) {
+        query GetCycleTimeDistribution($companyId: ID!, $projectKeys: [String!], $filters: IssueFilters) {
+          cycleTimeDistribution(companyId: $companyId, projectKeys: $projectKeys, filters: $filters) {
             range
             count
             percentage
@@ -193,6 +195,7 @@ describe('GraphQL API Integration Tests', () => {
       `;
 
       const variables = {
+        companyId: company.id,
         projectKeys: [project.key],
         filters: {}
       };
@@ -231,11 +234,11 @@ describe('GraphQL API Integration Tests', () => {
     });
 
     it('should provide flow metrics trend analysis', async () => {
-      const { project } = await createCycleTimeTestScenario();
+      const { company, project } = await createCycleTimeTestScenario();
       
       const query = `
-        query GetFlowMetricsTrend($projectKeys: [String!], $period: String!, $filters: IssueFilters) {
-          flowMetricsTrend(projectKeys: $projectKeys, period: $period, filters: $filters) {
+        query GetFlowMetricsTrend($companyId: ID!, $projectKeys: [String!], $period: String!, $filters: IssueFilters) {
+          flowMetricsTrend(companyId: $companyId, projectKeys: $projectKeys, period: $period, filters: $filters) {
             period
             averageCycleTime
             averageLeadTime
@@ -247,6 +250,7 @@ describe('GraphQL API Integration Tests', () => {
       `;
 
       const variables = {
+        companyId: company.id,
         projectKeys: [project.key],
         period: "month",
         filters: {}
@@ -289,11 +293,11 @@ describe('GraphQL API Integration Tests', () => {
 
   describe('DataLoader Optimization', () => {
     it('should efficiently load related data without N+1 queries', async () => {
-      const { project, issues } = await createCycleTimeTestScenario();
+      const { company, project, issues } = await createCycleTimeTestScenario();
       
       const query = `
-        query GetProjectWithIssues($key: String!) {
-          project(key: $key) {
+        query GetProjectWithIssues($companyId: ID!, $key: String!) {
+          project(companyId: $companyId, key: $key) {
             id
             key
             name
@@ -343,6 +347,7 @@ describe('GraphQL API Integration Tests', () => {
       `;
 
       const variables = {
+        companyId: company.id,
         key: project.key
       };
 
@@ -382,9 +387,11 @@ describe('GraphQL API Integration Tests', () => {
 
   describe('Error Handling', () => {
     it('should handle invalid project key gracefully', async () => {
+      const { company } = await createCycleTimeTestScenario();
+      
       const query = `
-        query GetProject($key: String!) {
-          project(key: $key) {
+        query GetProject($companyId: ID!, $key: String!) {
+          project(companyId: $companyId, key: $key) {
             id
             key
             name
@@ -393,6 +400,7 @@ describe('GraphQL API Integration Tests', () => {
       `;
 
       const variables = {
+        companyId: company.id,
         key: "INVALID_PROJECT_KEY"
       };
 
@@ -413,9 +421,11 @@ describe('GraphQL API Integration Tests', () => {
     });
 
     it('should validate pagination parameters', async () => {
+      const { company } = await createCycleTimeTestScenario();
+      
       const query = `
-        query GetIssues($pagination: PaginationInput) {
-          issues(pagination: $pagination) {
+        query GetIssues($companyId: ID!, $pagination: PaginationInput) {
+          issues(companyId: $companyId, pagination: $pagination) {
             issues {
               id
               key
@@ -426,6 +436,7 @@ describe('GraphQL API Integration Tests', () => {
       `;
 
       const variables = {
+        companyId: company.id,
         pagination: {
           limit: 2000, // Invalid - over limit
           offset: -1   // Invalid - negative
@@ -449,9 +460,11 @@ describe('GraphQL API Integration Tests', () => {
     });
 
     it('should handle invalid date ranges', async () => {
+      const { company } = await createCycleTimeTestScenario();
+      
       const query = `
-        query GetIssues($filters: IssueFilters) {
-          issues(filters: $filters) {
+        query GetIssues($companyId: ID!, $filters: IssueFilters) {
+          issues(companyId: $companyId, filters: $filters) {
             issues {
               id
               key
@@ -462,6 +475,7 @@ describe('GraphQL API Integration Tests', () => {
       `;
 
       const variables = {
+        companyId: company.id,
         filters: {
           createdAfter: "2025-01-01",
           createdBefore: "2024-01-01" // Invalid - before start date
@@ -487,13 +501,13 @@ describe('GraphQL API Integration Tests', () => {
 
   describe('Performance', () => {
     it('should handle large result sets efficiently', async () => {
-      const { project } = await createCycleTimeTestScenario();
+      const { company, project } = await createCycleTimeTestScenario();
       
       const startTime = Date.now();
       
       const query = `
-        query GetIssues($filters: IssueFilters, $pagination: PaginationInput) {
-          issues(filters: $filters, pagination: $pagination) {
+        query GetIssues($companyId: ID!, $filters: IssueFilters, $pagination: PaginationInput) {
+          issues(companyId: $companyId, filters: $filters, pagination: $pagination) {
             issues {
               id
               key
@@ -520,6 +534,7 @@ describe('GraphQL API Integration Tests', () => {
       `;
 
       const variables = {
+        companyId: company.id,
         filters: {
           projectKeys: [project.key]
         },

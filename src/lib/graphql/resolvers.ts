@@ -584,13 +584,20 @@ export const resolvers = {
       };
     },
 
-    issue: withErrorHandling(async (_: any, { key }: { key: string }) => {
+    issue: withErrorHandling(async (_: any, { companyId, key }: { companyId: string; key: string }, context: any) => {
+      await validateCompanyAccess(companyId, context);
+      
       if (!key || key.trim().length === 0) {
         throw new ValidationError('Issue key is required', 'key');
       }
       
       const issue = await prisma.issue.findUnique({
-        where: { key: key.trim() }
+        where: { 
+          issues_company_key_unique: {
+            companyId,
+            key: key.trim()
+          }
+        }
       });
       
       if (!issue) {
@@ -601,14 +608,18 @@ export const resolvers = {
     }, 'issue'),
 
     cycleTimeDistribution: async (_: any, { 
+      companyId,
       projectKeys, 
       filters 
     }: { 
+      companyId: string;
       projectKeys?: string[]; 
       filters?: any; 
     }) => {
-      // Early return optimization: check if we have any data at all
-      const hasData = await prisma.issue.count();
+      // Early return optimization: check if we have any data at all for this company
+      const hasData = await prisma.issue.count({
+        where: { companyId }
+      });
       if (hasData === 0) {
         return [
           { range: 'No Data', count: 0, percentage: 0 }
@@ -616,7 +627,7 @@ export const resolvers = {
       }
 
       const combinedFilters = { ...filters, projectKeys };
-      const whereClause = buildViewWhereClause(combinedFilters);
+      const whereClause = buildViewWhereClause(companyId, combinedFilters);
       
       const results = await prisma.$queryRaw<Array<{
         range: string;
@@ -672,22 +683,26 @@ export const resolvers = {
     },
 
     flowMetricsTrend: async (_: any, { 
+      companyId,
       projectKeys, 
       period, 
       filters 
     }: { 
+      companyId: string;
       projectKeys?: string[]; 
       period: string; 
       filters?: any; 
     }) => {
-      // Early return optimization: check if we have any data at all
-      const hasData = await prisma.issue.count();
+      // Early return optimization: check if we have any data at all for this company
+      const hasData = await prisma.issue.count({
+        where: { companyId }
+      });
       if (hasData === 0) {
         return [];
       }
 
       const combinedFilters = { ...filters, projectKeys };
-      const whereClause = buildViewWhereClause(combinedFilters);
+      const whereClause = buildViewWhereClause(companyId, combinedFilters);
       
       let dateFormat = '';
       let dateGrouping = '';

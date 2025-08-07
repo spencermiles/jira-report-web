@@ -4,6 +4,16 @@ import { resolvers } from '@/lib/graphql/resolvers';
 import { prisma } from '@/lib/db';
 import { Company, Project, Issue } from '@prisma/client';
 
+// Helper function to create test context
+const createTestContext = () => ({
+  req: {
+    headers: {
+      'x-forwarded-for': '127.0.0.1'
+    },
+    ip: '127.0.0.1'
+  }
+});
+
 describe('Multi-Tenant GraphQL Resolvers', () => {
   let server: ApolloServer;
   let company1: Company;
@@ -115,7 +125,7 @@ describe('Multi-Tenant GraphQL Resolvers', () => {
           }
         `,
         variables: { pagination: { limit: 10, offset: 0 } }
-      });
+      }, { contextValue: createTestContext() });
 
       expect(response.body.kind).toBe('single');
       if (response.body.kind === 'single') {
@@ -144,7 +154,7 @@ describe('Multi-Tenant GraphQL Resolvers', () => {
           }
         `,
         variables: { id: company1.id }
-      });
+      }, { contextValue: createTestContext() });
 
       expect(response.body.kind).toBe('single');
       if (response.body.kind === 'single') {
@@ -171,7 +181,7 @@ describe('Multi-Tenant GraphQL Resolvers', () => {
           }
         `,
         variables: { slug: company2.slug }
-      });
+}, { contextValue: createTestContext() });
 
       expect(response.body.kind).toBe('single');
       if (response.body.kind === 'single') {
@@ -195,7 +205,7 @@ describe('Multi-Tenant GraphQL Resolvers', () => {
           }
         `,
         variables: { id: 'non-existent-id' }
-      });
+}, { contextValue: createTestContext() });
 
       expect(response.body.kind).toBe('single');
       if (response.body.kind === 'single') {
@@ -214,7 +224,7 @@ describe('Multi-Tenant GraphQL Resolvers', () => {
             }
           }
         `
-      });
+}, { contextValue: createTestContext() });
 
       expect(response.body.kind).toBe('single');
       if (response.body.kind === 'single') {
@@ -238,7 +248,7 @@ describe('Multi-Tenant GraphQL Resolvers', () => {
           }
         `,
         variables: { companyId: company1.id }
-      });
+}, { contextValue: createTestContext() });
 
       expect(response.body.kind).toBe('single');
       if (response.body.kind === 'single') {
@@ -267,7 +277,7 @@ describe('Multi-Tenant GraphQL Resolvers', () => {
           companyId: company2.id, 
           key: 'PROJ2' 
         }
-      });
+}, { contextValue: createTestContext() });
 
       expect(response.body.kind).toBe('single');
       if (response.body.kind === 'single') {
@@ -294,7 +304,7 @@ describe('Multi-Tenant GraphQL Resolvers', () => {
           companyId: company1.id, 
           key: 'PROJ2' // PROJ2 belongs to company2
         }
-      });
+}, { contextValue: createTestContext() });
 
       expect(response.body.kind).toBe('single');
       if (response.body.kind === 'single') {
@@ -314,7 +324,7 @@ describe('Multi-Tenant GraphQL Resolvers', () => {
             }
           }
         `
-      });
+}, { contextValue: createTestContext() });
 
       expect(response.body.kind).toBe('single');
       if (response.body.kind === 'single') {
@@ -344,7 +354,7 @@ describe('Multi-Tenant GraphQL Resolvers', () => {
           companyId: company1.id,
           pagination: { limit: 10, offset: 0 }
         }
-      });
+}, { contextValue: createTestContext() });
 
       expect(response.body.kind).toBe('single');
       if (response.body.kind === 'single') {
@@ -374,7 +384,7 @@ describe('Multi-Tenant GraphQL Resolvers', () => {
           companyId: company2.id, 
           key: 'PROJ2-1' 
         }
-      });
+}, { contextValue: createTestContext() });
 
       expect(response.body.kind).toBe('single');
       if (response.body.kind === 'single') {
@@ -402,7 +412,7 @@ describe('Multi-Tenant GraphQL Resolvers', () => {
           companyId: company1.id, 
           key: 'PROJ2-1' // PROJ2-1 belongs to company2
         }
-      });
+}, { contextValue: createTestContext() });
 
       expect(response.body.kind).toBe('single');
       if (response.body.kind === 'single') {
@@ -432,7 +442,7 @@ describe('Multi-Tenant GraphQL Resolvers', () => {
             issueTypes: ['Bug']
           }
         }
-      });
+}, { contextValue: createTestContext() });
 
       expect(response.body.kind).toBe('single');
       if (response.body.kind === 'single') {
@@ -468,7 +478,7 @@ describe('Multi-Tenant GraphQL Resolvers', () => {
           }
         `,
         variables: { companyId: company1.id }
-      });
+}, { contextValue: createTestContext() });
 
       // Get all data for company2
       const company2Response = await server.executeOperation({
@@ -489,7 +499,7 @@ describe('Multi-Tenant GraphQL Resolvers', () => {
           }
         `,
         variables: { companyId: company2.id }
-      });
+}, { contextValue: createTestContext() });
 
       expect(company1Response.body.kind).toBe('single');
       expect(company2Response.body.kind).toBe('single');
@@ -530,7 +540,7 @@ describe('Multi-Tenant GraphQL Resolvers', () => {
           }
         `,
         variables: { companyId: 'non-existent-company' }
-      });
+}, { contextValue: createTestContext() });
 
       expect(response.body.kind).toBe('single');
       if (response.body.kind === 'single') {
@@ -544,7 +554,7 @@ describe('Multi-Tenant GraphQL Resolvers', () => {
       await prisma.company.update({
         where: { id: company1.id },
         data: { isActive: false }
-      });
+});
 
       const response = await server.executeOperation({
         query: `
@@ -556,7 +566,7 @@ describe('Multi-Tenant GraphQL Resolvers', () => {
           }
         `,
         variables: { companyId: company1.id }
-      });
+}, { contextValue: createTestContext() });
 
       expect(response.body.kind).toBe('single');
       if (response.body.kind === 'single') {
@@ -568,7 +578,7 @@ describe('Multi-Tenant GraphQL Resolvers', () => {
       await prisma.company.update({
         where: { id: company1.id },
         data: { isActive: true }
-      });
+});
     });
   });
 });

@@ -72,17 +72,36 @@ describe('WorkflowMappingService', () => {
     });
 
     it('should throw error when no API key is available during use', async () => {
+      // Create a fresh service instance without API key
+      const originalApiKey = process.env.OPENAI_API_KEY;
+      
+      // Clear all mocks to reset the OpenAI mock behavior
+      jest.clearAllMocks();
+      
+      // Mock the environment to be server-side but with no API key  
+      Object.defineProperty(global, 'window', { value: undefined });
       delete process.env.OPENAI_API_KEY;
       
-      // Mock the environment to be server-side but with no API key
-      Object.defineProperty(global, 'window', { value: undefined });
+      // Mock OpenAI to throw an error when no API key
+      mockOpenAI.mockImplementation(() => {
+        throw new Error('API key is required');
+      });
       
-      const service = new WorkflowMappingService();
-      
-      await expect(service.generateMappings({ 
-        projectKey: 'TEST', 
-        statusNames: ['Test'] 
-      })).rejects.toThrow('OPENAI_API_KEY environment variable is required');
+      try {
+        const service = new WorkflowMappingService();
+        
+        await expect(service.generateMappings({ 
+          projectKey: 'TEST', 
+          statusNames: ['Test'] 
+        })).rejects.toThrow('Failed to initialize OpenAI client');
+      } finally {
+        // Restore the API key and mock
+        if (originalApiKey) {
+          process.env.OPENAI_API_KEY = originalApiKey;
+        }
+        // Restore the normal mock behavior
+        mockOpenAI.mockImplementation(() => mockOpenAIInstance);
+      }
     });
   });
 

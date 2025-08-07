@@ -1,9 +1,11 @@
 import { prisma } from './test-db';
+import { Company } from '@prisma/client';
 
 export interface TestProject {
   id: number;
   key: string;
   name: string;
+  companyId: string;
 }
 
 export interface TestIssue {
@@ -19,16 +21,34 @@ export interface TestIssue {
   resolved?: Date;
 }
 
-export async function createTestProject(key: string, name: string): Promise<TestProject> {
-  return await prisma.project.create({
+export async function createTestCompany(name?: string, slug?: string): Promise<Company> {
+  return await prisma.company.create({
     data: {
-      key,
-      name,
+      name: name || `Test Company ${Date.now()}`,
+      slug: slug || `test-company-${Date.now()}`,
+      description: 'A test company for integration tests'
     },
   });
 }
 
-export async function createWorkflowMappings(projectId: number) {
+export async function createTestProject(key: string, name: string, companyId?: string): Promise<TestProject> {
+  let company: Company;
+  if (companyId) {
+    company = await prisma.company.findUniqueOrThrow({ where: { id: companyId } });
+  } else {
+    company = await createTestCompany();
+  }
+
+  return await prisma.project.create({
+    data: {
+      key,
+      name,
+      companyId: company.id,
+    },
+  });
+}
+
+export async function createWorkflowMappings(projectId: number, companyId?: string) {
   const mappings = [
     { jiraStatusName: 'To Do', canonicalStage: 'BACKLOG' },
     { jiraStatusName: 'Backlog', canonicalStage: 'BACKLOG' },
@@ -42,16 +62,41 @@ export async function createWorkflowMappings(projectId: number) {
     { jiraStatusName: 'Blocked', canonicalStage: 'BLOCKED' },
   ];
 
+  let company: Company;
+  if (companyId) {
+    company = await prisma.company.findUniqueOrThrow({ where: { id: companyId } });
+  } else {
+    // Get company from project
+    const project = await prisma.project.findUniqueOrThrow({ 
+      where: { id: projectId },
+      include: { company: true }
+    });
+    company = project.company;
+  }
+
   await prisma.workflowMapping.createMany({
     data: mappings.map(mapping => ({
       projectId,
+      companyId: company.id,
       jiraStatusName: mapping.jiraStatusName,
       canonicalStage: mapping.canonicalStage,
     })),
   });
 }
 
-export async function createTestIssue(issueData: Partial<TestIssue> & { projectId: number }): Promise<TestIssue> {
+export async function createTestIssue(issueData: Partial<TestIssue> & { projectId: number }, companyId?: string): Promise<TestIssue> {
+  let company: Company;
+  if (companyId) {
+    company = await prisma.company.findUniqueOrThrow({ where: { id: companyId } });
+  } else {
+    // Get company from project
+    const project = await prisma.project.findUniqueOrThrow({ 
+      where: { id: issueData.projectId },
+      include: { company: true }
+    });
+    company = project.company;
+  }
+
   const issue = await prisma.issue.create({
     data: {
       jiraId: issueData.jiraId || `jira-${Date.now()}`,
@@ -60,6 +105,7 @@ export async function createTestIssue(issueData: Partial<TestIssue> & { projectI
       issueType: issueData.issueType || 'Story',
       priority: issueData.priority || 'P2',
       projectId: issueData.projectId,
+      companyId: company.id,
       storyPoints: issueData.storyPoints || 5,
       created: issueData.created || new Date(),
       resolved: issueData.resolved,
@@ -74,11 +120,25 @@ export async function createStatusChange(
   issueId: number,
   fromValue: string | null,
   toValue: string,
-  changed: Date
+  changed: Date,
+  companyId?: string
 ) {
+  let company: Company;
+  if (companyId) {
+    company = await prisma.company.findUniqueOrThrow({ where: { id: companyId } });
+  } else {
+    // Get company from issue
+    const issue = await prisma.issue.findUniqueOrThrow({ 
+      where: { id: issueId },
+      include: { company: true }
+    });
+    company = issue.company;
+  }
+
   return await prisma.statusChange.create({
     data: {
       issueId,
+      companyId: company.id,
       fieldName: 'status',
       fromValue,
       toValue,
@@ -89,8 +149,11 @@ export async function createStatusChange(
 
 // Create a complete test scenario with known cycle times
 export async function createCycleTimeTestScenario() {
+  // Create test company first
+  const company = await createTestCompany('Test Cycle Time Company', 'test-cycle-time-company');
+  
   // Create test project
-  const project = await createTestProject('TEST', 'Test Project');
+  const project = await createTestProject('TEST', 'Test Project', company.id);
   await createWorkflowMappings(project.id);
 
   // Base date for predictable calculations
@@ -164,6 +227,7 @@ export async function createCycleTimeTestScenario() {
   await createStatusChange(issue4.id, null, 'In Progress', new Date('2024-01-22T09:00:00Z'));
 
   return {
+    company,
     project,
     issues: [issue1, issue2, issue3, issue4],
   };

@@ -2,9 +2,11 @@ import { ApolloServer } from '@apollo/server';
 import { typeDefs } from '../../src/lib/graphql/schema';
 import { resolvers } from '../../src/lib/graphql/resolvers';
 import { setupTestDatabase, teardownTestDatabase, prisma } from '../setup/test-db';
+import { Company } from '@prisma/client';
 
 describe('Multi-Project Upload Integration Tests', () => {
   let testServer: ApolloServer;
+  let testCompany: Company;
 
   beforeAll(async () => {
     await setupTestDatabase();
@@ -12,6 +14,7 @@ describe('Multi-Project Upload Integration Tests', () => {
       typeDefs,
       resolvers,
     });
+    await testServer.start();
   });
 
   afterAll(async () => {
@@ -23,12 +26,21 @@ describe('Multi-Project Upload Integration Tests', () => {
 
   beforeEach(async () => {
     await setupTestDatabase();
+    
+    // Create test company for each test with unique name
+    testCompany = await prisma.company.create({
+      data: {
+        name: `Test Company ${Date.now()}`,
+        slug: `test-company-${Date.now()}`,
+        description: 'A test company for integration tests'
+      }
+    });
   });
 
   describe('uploadJiraData Mutation', () => {
     const UPLOAD_JIRA_DATA_MUTATION = `
-      mutation UploadJiraData($data: [JiraIssueInput!]!, $workflowMappings: [WorkflowMappingInput!]!) {
-        uploadJiraData(data: $data, workflowMappings: $workflowMappings) {
+      mutation UploadJiraData($companyId: ID!, $data: [JiraIssueInput!]!, $workflowMappings: [WorkflowMappingInput!]!) {
+        uploadJiraData(companyId: $companyId, data: $data, workflowMappings: $workflowMappings) {
           success
           message
           projectsCreated
@@ -70,9 +82,14 @@ describe('Multi-Project Upload Integration Tests', () => {
       const response = await testServer.executeOperation({
         query: UPLOAD_JIRA_DATA_MUTATION,
         variables: {
+          companyId: testCompany.id,
           data: issues,
           workflowMappings: defaultWorkflowMappings,
         },
+      }, {
+        contextValue: {
+          req: { headers: {}, ip: 'test' }
+        }
       });
 
       expect(response.body.kind).toBe('single');
@@ -89,6 +106,7 @@ describe('Multi-Project Upload Integration Tests', () => {
 
       // Verify projects were created in database
       const projects = await prisma.project.findMany({
+        where: { companyId: testCompany.id },
         orderBy: { key: 'asc' },
       });
       expect(projects).toHaveLength(3);
@@ -96,17 +114,26 @@ describe('Multi-Project Upload Integration Tests', () => {
       
       // Verify issues were assigned to correct projects
       const proj1Issues = await prisma.issue.findMany({
-        where: { projectId: projects[0].id },
+        where: { 
+          projectId: projects[0].id,
+          companyId: testCompany.id 
+        },
       });
       expect(proj1Issues).toHaveLength(2);
       
       const proj2Issues = await prisma.issue.findMany({
-        where: { projectId: projects[1].id },
+        where: { 
+          projectId: projects[1].id,
+          companyId: testCompany.id 
+        },
       });
       expect(proj2Issues).toHaveLength(2);
       
       const proj3Issues = await prisma.issue.findMany({
-        where: { projectId: projects[2].id },
+        where: { 
+          projectId: projects[2].id,
+          companyId: testCompany.id 
+        },
       });
       expect(proj3Issues).toHaveLength(1);
     });
@@ -117,6 +144,7 @@ describe('Multi-Project Upload Integration Tests', () => {
         data: {
           key: 'EXISTING',
           name: 'Existing Project',
+          companyId: testCompany.id,
         },
       });
 
@@ -129,9 +157,14 @@ describe('Multi-Project Upload Integration Tests', () => {
       const response = await testServer.executeOperation({
         query: UPLOAD_JIRA_DATA_MUTATION,
         variables: {
+          companyId: testCompany.id,
           data: issues,
           workflowMappings: defaultWorkflowMappings,
         },
+      }, {
+        contextValue: {
+          req: { headers: {}, ip: 'test' }
+        }
       });
 
       const result = (response.body as any).singleResult;
@@ -141,6 +174,7 @@ describe('Multi-Project Upload Integration Tests', () => {
       expect(uploadResult.issuesCreated).toBe(3);
 
       const projects = await prisma.project.findMany({
+        where: { companyId: testCompany.id },
         orderBy: { key: 'asc' },
       });
       expect(projects).toHaveLength(2);
@@ -169,9 +203,14 @@ describe('Multi-Project Upload Integration Tests', () => {
       const response = await testServer.executeOperation({
         query: UPLOAD_JIRA_DATA_MUTATION,
         variables: {
+          companyId: testCompany.id,
           data: issues,
           workflowMappings: defaultWorkflowMappings,
         },
+      }, {
+        contextValue: {
+          req: { headers: {}, ip: 'test' }
+        }
       });
 
       const result = (response.body as any).singleResult;
@@ -180,15 +219,21 @@ describe('Multi-Project Upload Integration Tests', () => {
       expect(uploadResult.sprintsCreated).toBe(3); // Sprint 1, Sprint 2, Sprint A
       
       // Verify sprints are associated with correct projects
-      const proj1 = await prisma.project.findUnique({
-        where: { key: 'PROJ1' },
+      const proj1 = await prisma.project.findFirst({
+        where: { 
+          companyId: testCompany.id,
+          key: 'PROJ1' 
+        },
         include: { sprints: true },
       });
       expect(proj1?.sprints).toHaveLength(2);
       expect(proj1?.sprints.map(s => s.name).sort()).toEqual(['Sprint 1', 'Sprint 2']);
 
-      const proj2 = await prisma.project.findUnique({
-        where: { key: 'PROJ2' },
+      const proj2 = await prisma.project.findFirst({
+        where: { 
+          companyId: testCompany.id,
+          key: 'PROJ2' 
+        },
         include: { sprints: true },
       });
       expect(proj2?.sprints).toHaveLength(1);
@@ -211,13 +256,19 @@ describe('Multi-Project Upload Integration Tests', () => {
       await testServer.executeOperation({
         query: UPLOAD_JIRA_DATA_MUTATION,
         variables: {
+          companyId: testCompany.id,
           data: issues,
           workflowMappings: customMappings,
         },
+      }, {
+        contextValue: {
+          req: { headers: {}, ip: 'test' }
+        }
       });
 
       // Verify each project has the workflow mappings
       const projects = await prisma.project.findMany({
+        where: { companyId: testCompany.id },
         include: { workflowMappings: true },
         orderBy: { key: 'asc' },
       });
@@ -255,13 +306,21 @@ describe('Multi-Project Upload Integration Tests', () => {
       await testServer.executeOperation({
         query: UPLOAD_JIRA_DATA_MUTATION,
         variables: {
+          companyId: testCompany.id,
           data: issues,
           workflowMappings: defaultWorkflowMappings,
         },
+      }, {
+        contextValue: {
+          req: { headers: {}, ip: 'test' }
+        }
       });
 
-      const issue = await prisma.issue.findUnique({
-        where: { key: 'PROJ1-1' },
+      const issue = await prisma.issue.findFirst({
+        where: { 
+          companyId: testCompany.id,
+          key: 'PROJ1-1' 
+        },
         include: { statusChanges: true },
       });
 
@@ -277,9 +336,14 @@ describe('Multi-Project Upload Integration Tests', () => {
       const emptyResponse = await testServer.executeOperation({
         query: UPLOAD_JIRA_DATA_MUTATION,
         variables: {
+          companyId: testCompany.id,
           data: [],
           workflowMappings: defaultWorkflowMappings,
         },
+      }, {
+        contextValue: {
+          req: { headers: {}, ip: 'test' }
+        }
       });
 
       const emptyResult = (emptyResponse.body as any).singleResult;
@@ -297,9 +361,14 @@ describe('Multi-Project Upload Integration Tests', () => {
       const response = await testServer.executeOperation({
         query: UPLOAD_JIRA_DATA_MUTATION,
         variables: {
+          companyId: testCompany.id,
           data: largeDataSet,
           workflowMappings: defaultWorkflowMappings,
         },
+      }, {
+        contextValue: {
+          req: { headers: {}, ip: 'test' }
+        }
       });
 
       const result = (response.body as any).singleResult;
@@ -321,16 +390,23 @@ describe('Multi-Project Upload Integration Tests', () => {
       const response = await testServer.executeOperation({
         query: UPLOAD_JIRA_DATA_MUTATION,
         variables: {
+          companyId: testCompany.id,
           data: issues,
           workflowMappings: defaultWorkflowMappings,
         },
+      }, {
+        contextValue: {
+          req: { headers: {}, ip: 'test' }
+        }
       });
 
       const result = (response.body as any).singleResult;
       expect(result.data.uploadJiraData.success).toBe(true);
       expect(result.data.uploadJiraData.issuesCreated).toBe(2); // Should upsert, not duplicate
 
-      const dbIssues = await prisma.issue.findMany();
+      const dbIssues = await prisma.issue.findMany({
+        where: { companyId: testCompany.id }
+      });
       expect(dbIssues).toHaveLength(2);
     });
 
@@ -404,9 +480,14 @@ describe('Multi-Project Upload Integration Tests', () => {
       const response = await testServer.executeOperation({
         query: UPLOAD_JIRA_DATA_MUTATION,
         variables: {
+          companyId: testCompany.id,
           data: issuesWithDifferentFormats,
           workflowMappings: defaultWorkflowMappings,
         },
+      }, {
+        contextValue: {
+          req: { headers: {}, ip: 'test' }
+        }
       });
 
       const result = (response.body as any).singleResult;
@@ -416,6 +497,7 @@ describe('Multi-Project Upload Integration Tests', () => {
 
       // Verify the issue types were stored correctly
       const issues = await prisma.issue.findMany({
+        where: { companyId: testCompany.id },
         orderBy: { key: 'asc' }
       });
 

@@ -162,7 +162,7 @@ export class WorkflowMappingService {
             history.items.forEach((item: any) => {
               if (item.field === 'status') {
                 if (item.fromString) statusNames.add(item.fromString);
-                if (item.toString) statusNames.add(item.toString);
+                if (item['toString']) statusNames.add(item['toString']);
               }
             });
           }
@@ -176,7 +176,7 @@ export class WorkflowMappingService {
           if (fieldName === 'status') {
             // Handle both camelCase and snake_case value fields
             const fromValue = changelog.fromString || changelog.from_string;
-            const toValue = changelog.toString || changelog.to_string;
+            const toValue = changelog.to_string || changelog['toString'];
             if (fromValue) statusNames.add(fromValue);
             if (toValue) statusNames.add(toValue);
           }

@@ -11,6 +11,7 @@ export async function setupTestDatabase() {
     prisma.sprint.deleteMany(),
     prisma.workflowMapping.deleteMany(),
     prisma.project.deleteMany(),
+    prisma.company.deleteMany(),
   ]);
 }
 

@@ -12,13 +12,15 @@ describe('Multi-Tenant Integration Tests', () => {
     await prisma.issue.deleteMany({});
     await prisma.sprint.deleteMany({});
     await prisma.project.deleteMany({});
-    await prisma.company.deleteMany({
-      where: { slug: { not: 'default-organization' } }
-    });
+    await prisma.company.deleteMany({});
 
-    // Get default company
-    defaultCompany = await prisma.company.findUniqueOrThrow({
-      where: { slug: 'default-organization' }
+    // Create default company
+    defaultCompany = await prisma.company.create({
+      data: {
+        name: 'Default Organization',
+        slug: 'default-organization',
+        description: 'Default organization for system data'
+      }
     });
 
     // Create test companies
@@ -45,9 +47,11 @@ describe('Multi-Tenant Integration Tests', () => {
     await prisma.issue.deleteMany({});
     await prisma.sprint.deleteMany({});
     await prisma.project.deleteMany({});
-    await prisma.company.deleteMany({
-      where: { id: { in: [company1.id, company2.id] } }
-    });
+    if (company1?.id && company2?.id) {
+      await prisma.company.deleteMany({
+        where: { id: { in: [company1.id, company2.id] } }
+      });
+    }
     await prisma.$disconnect();
   });
 

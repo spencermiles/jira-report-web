@@ -114,11 +114,11 @@ export function useIssues(
   });
 }
 
-export function useIssue(key: string, options?: QueryHookOptions) {
+export function useIssue(companyId: string, key: string, options?: QueryHookOptions) {
   return useQuery(GET_ISSUE, {
     ...options,
-    variables: { key },
-    skip: !key || options?.skip,
+    variables: { companyId, key },
+    skip: !companyId || !key || options?.skip,
   });
 }
 

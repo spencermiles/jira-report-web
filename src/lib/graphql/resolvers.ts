@@ -430,7 +430,8 @@ export const resolvers = {
       }
       
       // For simple filtering, use Prisma directly
-      const whereClause = buildIssueWhereClause(filters);
+      // Note: This query needs to be scoped to a company. This suggests it should be moved to a company-scoped resolver
+      throw new Error('Issues query without company context not supported. Use company-specific queries instead.');
       
       const [issues, totalCount] = await Promise.all([
         prisma.issue.findMany({
@@ -1188,7 +1189,7 @@ export const resolvers = {
         projectKeys: [parent.key] // Ensure we only get issues for this project
       };
       
-      const whereClause = buildIssueWhereClause(combinedFilters);
+      const whereClause = buildIssueWhereClause(parent.companyId, combinedFilters);
       
       return await prisma.issue.findMany({
         where: whereClause,
@@ -1254,8 +1255,6 @@ export const resolvers = {
 
   Company: {
     projects: async (parent: any, { filters }: { filters?: any }) => {
-      const whereClause = buildIssueWhereClause(parent.id, filters);
-      
       return await prisma.project.findMany({
         where: { companyId: parent.id },
         orderBy: { updatedAt: 'desc' }

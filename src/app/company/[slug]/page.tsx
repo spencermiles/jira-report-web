@@ -6,6 +6,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { GET_COMPANY } from '@/lib/graphql/queries';
 import { paths } from '@/lib/paths';
 import CompanyProjectsView from '@/components/company/CompanyProjectsView';
+import { AppBreadcrumb, useBreadcrumbSegments } from '@/components/common/AppBreadcrumb';
 
 interface CompanyMetrics {
   totalProjects: number;
@@ -35,6 +36,7 @@ export default function CompanyDashboardPage() {
   const params = useParams();
   const router = useRouter();
   const slug = params.slug as string;
+  const buildSegments = useBreadcrumbSegments();
 
   const { data: companyData, loading: companyLoading, error: companyError } = useQuery<{ company: Company }>(GET_COMPANY, {
     variables: { slug },
@@ -42,6 +44,7 @@ export default function CompanyDashboardPage() {
   });
 
   const company = companyData?.company;
+  const breadcrumbSegments = company ? buildSegments.company(company.name) : [];
 
   if (companyLoading) {
     return (
@@ -91,47 +94,40 @@ export default function CompanyDashboardPage() {
       {/* Header */}
       <div className="bg-white border-b border-gray-200">
         <div className="mx-auto max-w-7xl px-6 py-8">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-4">
-              {company.logoUrl && (
-                <img
-                  src={company.logoUrl}
-                  alt={`${company.name} logo`}
-                  className="h-16 w-16 rounded-lg object-cover"
-                />
+          <AppBreadcrumb segments={breadcrumbSegments} className="mb-6" />
+          <div className="flex items-center space-x-4">
+            {company.logoUrl && (
+              <img
+                src={company.logoUrl}
+                alt={`${company.name} logo`}
+                className="h-16 w-16 rounded-lg object-cover"
+              />
+            )}
+            <div>
+              <h1 className="text-3xl font-bold text-gray-900">{company.name}</h1>
+              {company.description && (
+                <p className="mt-1 text-gray-600">{company.description}</p>
               )}
-              <div>
-                <h1 className="text-3xl font-bold text-gray-900">{company.name}</h1>
-                {company.description && (
-                  <p className="mt-1 text-gray-600">{company.description}</p>
+              <div className="flex items-center space-x-4 mt-2">
+                <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                  company.isActive 
+                    ? 'bg-green-100 text-green-800' 
+                    : 'bg-gray-100 text-gray-800'
+                }`}>
+                  {company.isActive ? 'Active' : 'Inactive'}
+                </span>
+                {company.website && (
+                  <a
+                    href={company.website}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-sm text-blue-600 hover:text-blue-800"
+                  >
+                    Website ↗
+                  </a>
                 )}
-                <div className="flex items-center space-x-4 mt-2">
-                  <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                    company.isActive 
-                      ? 'bg-green-100 text-green-800' 
-                      : 'bg-gray-100 text-gray-800'
-                  }`}>
-                    {company.isActive ? 'Active' : 'Inactive'}
-                  </span>
-                  {company.website && (
-                    <a
-                      href={company.website}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-sm text-blue-600 hover:text-blue-800"
-                    >
-                      Website ↗
-                    </a>
-                  )}
-                </div>
               </div>
             </div>
-            <button
-              onClick={() => router.push(paths.companies)}
-              className="text-gray-600 hover:text-gray-900 px-4 py-2 rounded-lg border border-gray-300 hover:bg-gray-50 transition-colors"
-            >
-              ← Back to Companies
-            </button>
           </div>
         </div>
       </div>

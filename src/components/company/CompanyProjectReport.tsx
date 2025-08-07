@@ -6,6 +6,7 @@ import { GET_COMPANY } from '@/lib/graphql/queries';
 import JiraIssueReport from '@/components/jira-report';
 import { useRouter } from 'next/navigation';
 import { paths } from '@/lib/paths';
+import { AppBreadcrumb, useBreadcrumbSegments } from '@/components/common/AppBreadcrumb';
 
 interface CompanyMetrics {
   totalProjects: number;
@@ -40,6 +41,7 @@ const CompanyProjectReport: React.FC<CompanyProjectReportProps> = ({
   projectKey
 }) => {
   const router = useRouter();
+  const buildSegments = useBreadcrumbSegments();
 
   const { data: companyData, loading: companyLoading, error: companyError } = useQuery<{ company: Company }>(GET_COMPANY, {
     variables: { slug: companySlug }
@@ -78,50 +80,27 @@ const CompanyProjectReport: React.FC<CompanyProjectReportProps> = ({
   }
 
   const company = companyData.company;
+  const breadcrumbSegments = buildSegments.companyProject(company.name, company.slug, projectKey);
 
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Company Header */}
       <div className="bg-white border-b border-gray-200">
         <div className="mx-auto max-w-7xl px-6 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-4">
-              {company.logoUrl && (
-                <img
-                  src={company.logoUrl}
-                  alt={`${company.name} logo`}
-                  className="h-10 w-10 rounded-lg object-cover"
-                />
-              )}
-              <div>
-                <nav className="text-sm text-gray-500 mb-1">
-                  <button
-                    onClick={() => router.push(paths.companies)}
-                    className="hover:text-gray-700"
-                  >
-                    Companies
-                  </button>
-                  <span className="mx-2">/</span>
-                  <button
-                    onClick={() => router.push(paths.company(company.slug))}
-                    className="hover:text-gray-700"
-                  >
-                    {company.name}
-                  </button>
-                  <span className="mx-2">/</span>
-                  <span className="font-medium text-gray-900">{projectKey}</span>
-                </nav>
-                <h1 className="text-xl font-semibold text-gray-900">
-                  {company.name} - {projectKey}
-                </h1>
-              </div>
+          <div className="flex items-center space-x-4">
+            {company.logoUrl && (
+              <img
+                src={company.logoUrl}
+                alt={`${company.name} logo`}
+                className="h-10 w-10 rounded-lg object-cover"
+              />
+            )}
+            <div>
+              <AppBreadcrumb segments={breadcrumbSegments} className="mb-1" />
+              <h1 className="text-xl font-semibold text-gray-900">
+                {company.name} - {projectKey}
+              </h1>
             </div>
-            <button
-              onClick={() => router.push(paths.company(company.slug))}
-              className="text-gray-600 hover:text-gray-900 px-4 py-2 rounded-lg border border-gray-300 hover:bg-gray-50 transition-colors"
-            >
-              ← Back to {company.name}
-            </button>
           </div>
         </div>
       </div>

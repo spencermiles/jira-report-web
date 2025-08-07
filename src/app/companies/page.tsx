@@ -7,6 +7,7 @@ import { GET_COMPANIES } from '@/lib/graphql/queries';
 import { paths } from '@/lib/paths';
 import { useRouter } from 'next/navigation';
 import CreateCompanyModal from '@/components/company/CreateCompanyModal';
+import { AppBreadcrumb, useBreadcrumbSegments } from '@/components/common/AppBreadcrumb';
 
 interface CompanyMetrics {
   totalProjects: number;
@@ -41,6 +42,8 @@ interface CompaniesResponse {
 export default function CompaniesPage() {
   const router = useRouter();
   const [createModalOpen, setCreateModalOpen] = useState(false);
+  const buildSegments = useBreadcrumbSegments();
+  const breadcrumbSegments = buildSegments.companies();
   const { data, loading, error, refetch } = useQuery<{ companies: CompaniesResponse }>(GET_COMPANIES, {
     variables: {
       pagination: { limit: 20, offset: 0 },
@@ -92,6 +95,7 @@ export default function CompaniesPage() {
   return (
     <div className="min-h-screen bg-gray-50 p-6">
       <div className="mx-auto max-w-7xl">
+        <AppBreadcrumb segments={breadcrumbSegments} className="mb-6" />
         <div className="mb-8">
           <div className="flex items-center justify-between">
             <div>

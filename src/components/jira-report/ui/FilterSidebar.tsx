@@ -99,7 +99,12 @@ interface FilterSidebarProps {
   hasActiveFilters: boolean;
 }
 
-const FilterSidebar: React.FC<FilterSidebarProps> = ({
+interface FilterSidebarStyledProps extends FilterSidebarProps {
+  className?: string;
+  showHeader?: boolean;
+}
+
+const FilterSidebar: React.FC<FilterSidebarStyledProps> = ({
   filters,
   accordionStates,
   filterCounts,
@@ -118,23 +123,27 @@ const FilterSidebar: React.FC<FilterSidebarProps> = ({
   toggleAccordion,
   filteredStoriesCount,
   totalStoriesCount,
-  hasActiveFilters
+  hasActiveFilters,
+  className = "w-64 bg-gray-50 border-r border-gray-200 p-4 space-y-4 overflow-y-auto h-screen sticky top-0",
+  showHeader = true
 }) => {
   const { issueTypeCounts, sprintCounts, storyPointCounts, statusCounts, priorityCounts } = filterCounts;
 
   return (
-    <div className="w-64 bg-gray-50 border-r border-gray-200 p-4 space-y-4 overflow-y-auto h-screen sticky top-0" style={{ minWidth: '256px' }}>
-      <div className="flex items-center justify-between mb-4">
-        <h3 className="font-semibold text-gray-900">Filters</h3>
-        {hasActiveFilters && (
-          <button
-            onClick={clearAllFilters}
-            className="text-xs text-blue-600 hover:text-blue-800 underline font-medium"
-          >
-            Clear All
-          </button>
-        )}
-      </div>
+    <div className={className} style={{ minWidth: '256px' }}>
+      {showHeader && (
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="font-semibold text-gray-900">Filters</h3>
+          {hasActiveFilters && (
+            <button
+              onClick={clearAllFilters}
+              className="text-xs text-blue-600 hover:text-blue-800 underline font-medium"
+            >
+              Clear All
+            </button>
+          )}
+        </div>
+      )}
 
       {/* Created Date Range Filter */}
       <div>

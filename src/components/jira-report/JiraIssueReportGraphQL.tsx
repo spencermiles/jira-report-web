@@ -1,8 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import Link from 'next/link';
-import { FileText, AlertCircle, ArrowLeft } from 'lucide-react';
+import { FileText, AlertCircle } from 'lucide-react';
 import { 
   Chart as ChartJS,
   CategoryScale,
@@ -32,13 +31,12 @@ import { useProjectWithIssues, useFilters } from '@/hooks/use-graphql';
 import { useDefaultCompanyId } from '@/hooks/use-default-company';
 
 // Components
-import FilterSidebar from './ui/FilterSidebar';
+import CollapsibleFilterSidebar from './ui/CollapsibleFilterSidebar';
 import MetricsTab from './tabs/MetricsTab';  
 import IssuesTab from './tabs/IssuesTab';
 import ChartsTab from './tabs/ChartsTab';
 
 // Utils
-import { paths } from '@/lib/paths';
 import { calculateStats } from './utils/calculations';
 import { useSorting } from './hooks/useSorting';
 
@@ -58,7 +56,7 @@ interface AccordionState {
 
 // Components
 import GraphQLErrorBoundary from '@/components/common/GraphQLErrorBoundary';
-import { FilterSidebarSkeleton, IssuesTableSkeleton } from '@/components/common/SkeletonLoader';
+import { IssuesTableSkeleton } from '@/components/common/SkeletonLoader';
 
 interface JiraIssueReportGraphQLProps {
   preselectedProjectKey?: string;
@@ -91,7 +89,7 @@ const JiraIssueReportGraphQL: React.FC<JiraIssueReportGraphQLProps> = ({
     projectKeys: preselectedProjectKey ? [preselectedProjectKey] : undefined,
   });
 
-  // Fetch project data with issues using GraphQL
+  // Fetch project data with filtered issues using GraphQL
   const { loading, error, data, refetch } = useProjectWithIssues(
     effectiveCompanyId || '',
     preselectedProjectKey || '',
@@ -102,22 +100,35 @@ const JiraIssueReportGraphQL: React.FC<JiraIssueReportGraphQLProps> = ({
     }
   );
 
+  // Fetch all issues (unfiltered) for filter counts
+  const { data: allIssuesData } = useProjectWithIssues(
+    effectiveCompanyId || '',
+    preselectedProjectKey || '',
+    { projectKeys: preselectedProjectKey ? [preselectedProjectKey] : undefined }, // Only filter by project
+    {
+      skip: !effectiveCompanyId || !preselectedProjectKey,
+      fetchPolicy: 'cache-and-network',
+    }
+  );
+
   const project = data?.project as GraphQLProject | undefined;
   const issues = (project?.issues || []) as GraphQLIssue[];
+  const allIssues = (allIssuesData?.project?.issues || []) as GraphQLIssue[];
 
   // Initialize all issue types as selected when data loads
   useEffect(() => {
-    if (issues.length > 0 && (!filters.issueTypes || filters.issueTypes.length === 0)) {
-      // Get all unique issue types from the loaded issues
-      const allIssueTypes = [...new Set(issues.map(issue => issue.issueType))];
+    if (allIssues.length > 0 && (!filters.issueTypes || filters.issueTypes.length === 0)) {
+      // Get all unique issue types from ALL issues (not just filtered ones)
+      const allIssueTypes = [...new Set(allIssues.map(issue => issue.issueType))];
       updateFilter('issueTypes', allIssueTypes);
     }
-  }, [issues.length]); // Only run when issues are first loaded
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [allIssues.length]); // Only run when all issues are first loaded
 
   // Handler for viewing defect issues by priority
   const handleViewDefectIssues = (priority: string) => {
     // Clear all filters but keep all issue types selected
-    const allIssueTypes = [...new Set(issues.map(issue => issue.issueType))];
+    const allIssueTypes = [...new Set(allIssues.map(issue => issue.issueType))];
     clearFilters();
     updateFilter('issueTypes', allIssueTypes);
     // Set the priority filter after clearing
@@ -136,9 +147,9 @@ const JiraIssueReportGraphQL: React.FC<JiraIssueReportGraphQLProps> = ({
     }));
   };
 
-  // Create filter counts for sidebar
+  // Create filter counts for sidebar using ALL issues (unfiltered)
   const getFilterCounts = () => {
-    if (!issues.length) {
+    if (!allIssues.length) {
       return {
         issueTypeCounts: [],
         sprintCounts: [],
@@ -156,7 +167,7 @@ const JiraIssueReportGraphQL: React.FC<JiraIssueReportGraphQLProps> = ({
       storyPoints: {} as Record<string | number, number>,
     };
 
-    issues.forEach((issue: GraphQLIssue) => {
+    allIssues.forEach((issue: GraphQLIssue) => {
       // Count issue types
       counts.issueTypes[issue.issueType] = (counts.issueTypes[issue.issueType] || 0) + 1;
 
@@ -430,12 +441,10 @@ const JiraIssueReportGraphQL: React.FC<JiraIssueReportGraphQLProps> = ({
 
   return (
     <GraphQLErrorBoundary error={error} retry={refetch} loading={loading}>
-      <div className="flex min-h-screen bg-white">
-        {/* Filter Sidebar - only show when there are issues or loading */}
-        {loading ? (
-          <FilterSidebarSkeleton />
-        ) : issues.length > 0 ? (
-        <FilterSidebar
+      <div className="min-h-screen bg-white">
+        {/* Filter Sidebar Overlay - only show when there are issues */}
+        {!loading && issues.length > 0 && (
+          <CollapsibleFilterSidebar
           filters={{
             issueTypes: filters.issueTypes || [],
             priorities: filters.priorities || [],
@@ -471,7 +480,7 @@ const JiraIssueReportGraphQL: React.FC<JiraIssueReportGraphQLProps> = ({
           }}
           toggleAccordion={toggleAccordion}
           filteredStoriesCount={issues.length}
-          totalStoriesCount={issues.length}
+          totalStoriesCount={allIssues.length}
           hasActiveFilters={(() => {
             // Check if any filters are active, but don't count issue types if all are selected
             const allIssueTypes = filterCounts.issueTypeCounts.map(item => item.value);
@@ -489,23 +498,16 @@ const JiraIssueReportGraphQL: React.FC<JiraIssueReportGraphQLProps> = ({
               Boolean(filters.resolvedAfter) ||
               Boolean(filters.resolvedBefore);
           })()}
-        />
-        ) : null}
+          />
+        )}
         
         {/* Main Content */}
-        <div className="flex-1 p-6 bg-white">
-        <div className="max-w-7xl mx-auto">
-          {/* Navigation breadcrumb when viewing specific project */}
+        <div className="bg-white">
+        <div className="max-w-7xl mx-auto px-6 py-6">
+          {/* Project title when viewing specific project */}
           {preselectedProjectKey && (
             <div className="mb-6">
-              <Link 
-                href={paths.projects}
-                className="inline-flex items-center text-sm text-gray-600 hover:text-gray-900 transition-colors"
-              >
-                <ArrowLeft className="h-4 w-4 mr-2" />
-                Back to Projects
-              </Link>
-              <h1 className="text-2xl font-bold text-gray-900 mt-2">
+              <h1 className="text-2xl font-bold text-gray-900">
                 {project?.name ? `${preselectedProjectKey} - ${project.name}` : `${preselectedProjectKey} - Project Analysis`}
               </h1>
             </div>
